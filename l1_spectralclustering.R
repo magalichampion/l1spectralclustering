@@ -6,25 +6,26 @@ l1_spectralclustering <- function(A,k,index){
   # - A : matrice d'adjacence
   # - k : nombre de communautés
   # - index : vecteur indiquant 1 noeud par communauté
+  A <- A_perturbed
   
   # nombre de noeuds
   m <- ncol(A)
   
+  com <- c()
   # 1st step: travail sur la 1ère communauté
-  res <- find_com(A,k,m,index,iteration=1)
+  res <- find_com(A,k,m,index,iteration=1,lasso=TRUE)
   com <- res$vector
   
   # 2nd step: loop sur les communautés
   for (i in (2:k)){
-    res <- find_com(res$A,k,m,index,iteration=i) 
+    res <- find_com(res$A,k,m,index,iteration=i,lasso=TRUE) 
     com <- cbind(com,res$vector)
   }
   
-  com[which(com<0.5)] <- 0
-  com[which(com>0.5)] <- 1
+  com[which(com>0)] <- 1
 }
 
-find_com <- function(A,k,m,index,iteration){
+find_com <- function(A,k,m,index,iteration,lasso=FALSE){
   # main code pour trouver les indices de chaque communauté
   
   # 1st step: SVD sur A 
@@ -37,7 +38,8 @@ find_com <- function(A,k,m,index,iteration){
   w <- U[,index[iteration]]
   W <- U[,-index[iteration]]
   
-  #lassosol <- cv.glmnet(W,-w)
+  if (lasso==TRUE){
+    lassosol <- cv.glmnet(W,-w)
   # if (lassosol$nzero[which(lassosol$lambda==lassosol$lambda.min)]==0){
   #   Firstnnzero <- lassosol$lambda[which(lassosol$nzero>0)]
   #   lambda_opt <- Firstnnzero[1]
@@ -46,28 +48,37 @@ find_com <- function(A,k,m,index,iteration){
   # }
  
   #lambda_opt <- lassosol$lambda[which(lassosol$cvm>min(lassosol$cvup))]
-  #cvtop<- min(lassosol$cvm)+5*(max(lassosol$cvm)-min(lassosol$cvm))/100
-  #plot(lassosol)
-  #abline(h=cvtop)
-  #lambda_opt <- lassosol$lambda[which(lassosol$cvm>cvtop)]
+    cvtop<- min(lassosol$cvm)+10*(max(lassosol$cvm)-min(lassosol$cvm))/100
+    plot(lassosol)
+    abline(h=cvtop)
+    lambda_opt <- lassosol$lambda[which(lassosol$cvm>cvtop)]
+    lambda_opt <- lambda_opt[1]
   #lambda_opt <- lambda_opt[1]
-  #lambda_opt <- lambda_opt[1]
-  #sol <- glmnet(W,-w,lambda=lambda_opt)
-  sol <- glmnet(W,-w,lambda=0)
-  sol <- sol$beta
+    sol <- glmnet(W,-w,lambda=lambda_opt)
+    sol <- sol$beta
+    solution <- as.matrix(sol)
+    I <- which(solution>0)
+    sol2 <- glmnet(W,-w,lambda=0)
+    sol2 <- sol2$beta
+    sol2 <- as.matrix(sol2)
+    solution[I] <- sol2[I]
+  } else {
+    sol <- glmnet(W,-w,lambda=0)
+    sol <- sol$beta
+    solution <- as.matrix(sol)
+  }
   
-  solution <- as.matrix(sol)
   if(index[iteration]==1){
     v <- c( 1 ,solution[index[iteration]:length(solution)])
   } else{
     v <- c(solution[1:(index[iteration]-1)], 1 ,solution[index[iteration]:length(solution)])
   }
+ 
   #v <- rep(0,m)
   #v[index[i]] <- 1
   #v[-index[i]] <- sol
   
   # 3rd step: find the other communities using deflation
   A_def <- A - t(t(v)) %*% t(v)
-  
   return(list(A=A_def,vector=v))
 }
