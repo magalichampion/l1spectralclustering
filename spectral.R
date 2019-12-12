@@ -16,7 +16,7 @@ A=bdiag(A,matrix(1,taille[i],taille[i]));
 n=dim(A)[1]
 A=A-diag(dim(A)[1])
 
-p=0
+p=0.1
 B=matrix(rbinom(n*n,1,p),n,n)
 B[lower.tri(B)] <- 0
 B=B+t(B)
