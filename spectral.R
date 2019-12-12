@@ -16,9 +16,14 @@ A=bdiag(A,matrix(1,taille[i],taille[i]));
 n=dim(A)[1]
 A=A-diag(dim(A)[1])
 
-p=0.5
+p=0
 B=matrix(rbinom(n*n,1,p),n,n)
 B[lower.tri(B)] <- 0
 B=B+t(B)
 B=B-diag(diag(B))
 A_perturbed=(A+B)-2 * floor((A+B)/2)
+
+c=cumsum(taille);
+d=c[1:(length(taille)-1)]
+index=c(1,d+1)
+
