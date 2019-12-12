@@ -57,7 +57,7 @@ find_com <- function(A,k,m,index,iteration){
   sol <- sol$beta
   
   solution <- as.matrix(sol)
-  if(iteration==1){
+  if(index[iteration]==1){
     v <- c( 1 ,solution[index[iteration]:length(solution)])
   } else{
     v <- c(solution[1:(index[iteration]-1)], 1 ,solution[index[iteration]:length(solution)])
