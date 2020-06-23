@@ -71,3 +71,44 @@ find_com <- function(A,k,m,index,iteration){
   
   return(list(A=A_def,vector=v))
 }
+
+recovery_adjacency <- function(A,com){
+  
+  li1<- c()
+  m=dim(com)[1]
+  for (i in 1:k){
+    ind1 <- which(com[,i]==1)
+    li1[i] <- length(ind1)
+  }
+  adja<- matrix(0,m,m)
+
+  mat0 <- matrix(c(rep(com[,1],li1[1])),li1[1],dim(com)[1],byrow = TRUE)
+  for(j in 2:(dim(com)[2])){
+    mat <- matrix(c(rep(com[,j],li1[j])),li1[j],dim(com)[1],byrow = TRUE)
+    mat2 <- rbind(mat0,mat)
+    mat0=mat2
+  }
+  mat0[lower.tri(mat0)] <- 0
+  mat0=mat0+t(mat0)
+  mat0=mat0-diag(diag(mat0))
+   # i1<- c()
+   # m=dim(com)[1]
+   # ind0 <- which(com[,1]==1)
+   # for (i in 2:k){
+   #   ind <- which(com[,i]==1)
+   #   ind0 <- c(ind0,ind)
+   # }
+   # uni<- unique(ind0)
+   # 
+   # #indices0 <- which(ind0==unique(ind0)[1])
+   # for (j in 1:length(uni)){
+   #   #indices <- which(ind0==unique(ind0)[j]) 
+   #   #indices1 <- c(indices0,indices)
+   #   #indices0 <-indices1 
+   #   indices0[j] <- which(ind0==unique(ind0)[j])[1]
+   # }
+   #   inl <- sort(indices0,index.return=TRUE)
+   #   uni <- uni[inl$ix]
+   #   A_recovery  <- A[uni,uni]
+  return(A_recovery)
+}
