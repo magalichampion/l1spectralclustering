@@ -3,10 +3,10 @@ library(igraph)
 
 # code l1 spectral clustering - v3
 data <- CreateDataSet(k=3,n=20,p=list(p_inside=0.1,p_outside=0.1),print.plot = TRUE)
-results <- l1_spectralclustering(M=data$A_hat,pen="lasso")
+results <- l1_spectralclustering(M=data$A_hat, pen="lasso")
 
 ##### Create data set #####
-CreateDataSet <- function(k,n,p,print.plot=TRUE){
+CreateDataSet <- function(k,n,p,print.plot=TRUE,ClustersLength = NULL){
   # k: number of clusters
   # n: number of nodes
   # perturbation: vector of perturbations, p1 (inside) and p2 (outside)
@@ -21,20 +21,22 @@ CreateDataSet <- function(k,n,p,print.plot=TRUE){
   MinLength <- 2
   Length <- sample(MinLength:MaxLength)
   
-  ClustersLength <- c()
-  Length_tmp <- Length
-  for (i in (1:(k-1))){
-    Length_tmp <- Length_tmp[Length_tmp<(n-sum(ClustersLength)+2*(i-k)+1)]
-    if (length(Length_tmp)>0){
-      clustersLength <- Length_tmp[1]
-      ClustersLength <- c(ClustersLength,clustersLength)
-      Length_tmp <- Length_tmp[-1]
-    } else {
-      ClustersLength <- c(ClustersLength,2)
+  if (is.null(ClustersLength)){
+    ClustersLength <- c()
+    Length_tmp <- Length
+    for (i in (1:(k-1))){
+      Length_tmp <- Length_tmp[Length_tmp<(n-sum(ClustersLength)+2*(i-k)+1)]
+      if (length(Length_tmp)>0){
+        clustersLength <- Length_tmp[1]
+        ClustersLength <- c(ClustersLength,clustersLength)
+        Length_tmp <- Length_tmp[-1]
+      } else {
+        ClustersLength <- c(ClustersLength,2)
+      }
     }
+    ClustersLength <- c(ClustersLength,(n-sum(ClustersLength)))
+    ClustersLength <- sort(ClustersLength)
   }
-  ClustersLength <- c(ClustersLength,(n-sum(ClustersLength)))
-  ClustersLength <- sort(ClustersLength)
   
   print(paste0(c("There are",k,"clusters of size ",ClustersLength,"."), collapse=" "))
   
