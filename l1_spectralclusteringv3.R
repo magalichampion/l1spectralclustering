@@ -2,7 +2,7 @@ library(glmnet)
 library(igraph)
 
 # code l1 spectral clustering - v3
-data <- CreateDataSet(k=3,n=20,p=list(p_inside=0.1,p_outside=0.1),print.plot = TRUE)
+data <- CreateDataSet(k=3,n=10,p=list(p_inside=0.1,p_outside=0.1),print.plot = TRUE)
 results <- l1_spectralclustering(M=data$A_hat, pen="lasso")
 
 ##### Create data set #####
@@ -19,7 +19,11 @@ CreateDataSet <- function(k,n,p,print.plot=TRUE,ClustersLength = NULL){
   
   MaxLength <- n - 2*(k-1) 
   MinLength <- 2
-  Length <- sample(MinLength:MaxLength)
+  if (MinLength!=MaxLength){
+    Length <- sample(MinLength:MaxLength)
+  } else {
+    Length <- 2
+  }
   
   if (is.null(ClustersLength)){
     ClustersLength <- c()
@@ -93,7 +97,7 @@ l1_spectralclustering <- function(M, k = NULL, index = NULL, pen){
   Structure <- FindStructure(M)
   
   # 2nd step: find the optimal number of clusters
-  clusters <- FindNbrClusters(M,Structure,k)
+  clusters <- FindNbrClusters(M,Structure  = Structure,k = k)
   
   # 3rd step: find the indices of the community
   Elements <- FindElement(M = M, Structure = Structure, k = clusters,index = index)
@@ -112,86 +116,121 @@ l1_spectralclustering <- function(M, k = NULL, index = NULL, pen){
     
     results <- l1spectral(M = Mtmp, k = clusters_tmp, elements = Elements_tmp,pen=pen)
     
+    if (!is.null(ncol(results))){
+      if (ncol(results)!=clusters$nbr_clusters[[i]]){
+        cluster <- clusters$nbr_clusters
+        cluster[[i]] <- ncol(results)
+        S <- cumsum(unlist(cluster))
+      }
+    }
     if (i==1){
       comm[Structure$groups[[i]],1:S[1]] <- results
     } else {
       comm[Structure$groups[[i]],(S[i-1]+1):S[i]] <- results
     }
   }
-  if (length(which(rowSums(comm>0)>1))){
-    I <- which(rowSums(comm>0)>1)
-    for (i in (1:length(which(rowSums(comm>0)>1)))){
-      comm[I[i],-which.max(comm[I[i],])] <- 0
+  if (length(which(colSums(comm)==0))>0){
+    comm <- comm[,-which(colSums(comm)==0)]
+  }
+  if (!is.null(ncol(comm))){
+    if (length(which(rowSums(comm>0)>1))){
+      I <- which(rowSums(comm>0)>1)
+      for (i in (1:length(which(rowSums(comm>0)>1)))){
+        comm[I[i],-which.max(comm[I[i],])] <- 0
+      }
     }
   }
+  comm[comm>0] <- 1
   return(list(comm=comm,Structure=Structure,clusters=clusters,Elements =Elements))
 }
 
 l1spectral <- function(M, k, elements,pen){
-  # code for running the l1-spectral algorithm for one component
-  indices <- elements$indices
+  if (length(M)==1){
+    # only one node in the community
+    comm <- 1
+  } else {
+    # code for running the l1-spectral algorithm for one component
+    indices <- elements$indices
   
-  # 1st step: svd on M
-  n <- ncol(M)
-  svd <- eigen(M) 
-  eigenvalues <- sort(svd$values,index.return=TRUE)
-  eigenvectors <- svd$vectors[,eigenvalues$ix]
+    # 1st step: svd on M
+    n <- ncol(M)
+    svd <- eigen(M) 
+    eigenvalues <- sort(svd$values,index.return=TRUE)
+    eigenvectors <- svd$vectors[,eigenvalues$ix]
   
-  # 2nd step: loop on the number of clusters
-  algo <- "stop"
-  comm <- c()
-  DoubleNodes <- c()
-  
-  while (algo == "stop"){
-    if (length(DoubleNodes)>0){
-      # find other indices
-      I <- elements$score[-which(names(elements$score)%in%DoubleNodes)]
-      if (length(I)==0){
-        print("One cluster disappears.")
-        algo <- "continue"
-        break
-      } else {
-        I <- names(sort(I[1:k]))
-        indices <- as.numeric(substring(I, 5))
-      }
-    }
-    
-    eigenvectors_tmp <- eigenvectors
+    # 2nd step: loop on the number of clusters  
+    algo <- "stop"
     comm <- c()
-    for (i in (1:k)){
-    
-      # 3rd step: check the indices (only if i>1)
-      if (i>1){
-        if (length(which(v[indices[-(i-1)]]>0))>0){
-          print("Find other community indices.")
-          doubleNodes <- paste0("Node",indices[-(i-1)][which(v[indices[-(i-1)]]>0)])
-          DoubleNodes <- c(DoubleNodes,doubleNodes)
-          algo <- "stop"
-          break
-        } else {
+    DoubleNodes <- c()
+  
+    while (algo == "stop"){
+      if (length(DoubleNodes)>0){
+        # find other indices
+        I <- elements$score[-which(names(elements$score)%in%DoubleNodes)]
+        if (length(I)==0){
+          print("One cluster disappears.")
           algo <- "continue"
+          break
+        } else if (length(I)<k){
+          k <- length(I)
+        } else {
+          I <- names(sort(I[1:k]))
+          indices <- as.numeric(substring(I, 5))
         }
-      } 
-      if (i==k){
-        algo="continue"
       }
     
-      # 4th step: Gram-Schmidt (only if i>1)
-      if (i>1){
-        eigenvectors_tmp <- eigenvectors_tmp[,-(n-k+i-1)]
-        eigenvectors_tmp <- cbind(v,eigenvectors_tmp)
+      if (k>1){
+        eigenvectors_tmp <- eigenvectors
+        comm <- c()
+        for (i in (1:k)){
+      
+          # 3rd step: check the indices (only if i>1)
+          if (i>1){
+            if (length(which(v[indices[-(i-1)]]>0))>0){
+              print("Find other community indices.")
+              doubleNodes <- paste0("Node",indices[-(i-1)][which(v[indices[-(i-1)]]>0)])
+              DoubleNodes <- c(DoubleNodes,doubleNodes)
+              algo <- "stop"
+              break
+            } else {
+              algo <- "continue"
+            }
+          } 
     
-        eigenvectors_tmp <- GramSchmidt(eigenvectors_tmp)
-        eigenvectors_tmp <- cbind(eigenvectors_tmp[,2:(n-k+i-1)],eigenvectors_tmp[,1],eigenvectors_tmp[,(n-k+i):n])
+          # 4th step: Gram-Schmidt (only if i>1)
+          if (i>1){
+            eigenvectors_tmp <- eigenvectors_tmp[,-(n-k+i-1)]
+            eigenvectors_tmp <- cbind(v,eigenvectors_tmp)
+      
+            eigenvectors_tmp <- GramSchmidt(eigenvectors_tmp)
+            eigenvectors_tmp <- cbind(eigenvectors_tmp[,2:(n-k+i-1)],eigenvectors_tmp[,1],eigenvectors_tmp[,(n-k+i):n])
+          }
+      
+          # 5th step: solve the lasso
+          U <- t(eigenvectors_tmp[,1:(n-k+i-1)])
+          v <- Lasso(U, n, indices, iteration = i,pen=pen,k)
+          print(paste0("Iteration ",i," done."))
+      
+          # 6th step: save the community index
+          comm <- cbind(comm,v)
+          
+          if (i==k){
+            # check the indices for the last time
+            if (length(which(v[indices[-i]]>0))>0){
+              print("Find other community indices.")
+              doubleNodes <- paste0("Node",indices[-i][which(v[indices[-i]]>0)])
+              DoubleNodes <- c(DoubleNodes,doubleNodes)
+              algo <- "stop"
+              break
+            } else {
+              algo <- "continue"
+            }
+          } 
+        }
+      } else {
+        comm <- rep(1,n)
+        algo <- "continue"
       }
-    
-      # 5th step: solve the lasso  
-      U <- t(eigenvectors_tmp[,1:(n-k+i-1)])
-      v <- Lasso(U, n, indices, iteration = i,pen=pen,k)
-      print(paste0("Iteration ",i," done."))
-    
-      # 6th step: save the community index
-      comm <- cbind(comm,v)
     }
   }
   return(comm)
@@ -199,14 +238,14 @@ l1spectral <- function(M, k, elements,pen){
 
 Lasso <- function(U, n, indices, iteration,pen,k){
   w <- U[,indices[iteration]]
-  W <- U[,-indices[iteration]]
+  W <- matrix(U[,-indices[iteration]],ncol=(ncol(U)-1),nrow=nrow(U))
   
-  if (sum(w)==0){
+  if (sum(w)==0 || length(w)==1){
     print("There is only one node in this cluster.")
     # w is constant - no more nodes in the cluster
     v <- rep(0,n)
     v[indices] <- 1
-  } else if (length(which(w>0))==1){
+  } else if (length(which(w!=0))==1){
     sol <- glmnet(W,-w,lambda=0,lower.limits=0)
     sol <- sol$beta
     solution <- as.matrix(sol)
@@ -304,7 +343,7 @@ FindElement <- function(M, Structure, k, index = NULL){
   betweenness <- lapply(Structure$groups,between)
   
   if (!is.null(index)){
-    if (length(index)!=clusters$nbr_clusters_total){
+    if (length(index)!=k$nbr_clusters_total){
       print(paste0("The number of communities indices do not coincide with the number of communities. The algorithm will compute new indices for the ",clusters$nbr_clusters_total," communities."))
       continue <- TRUE
     } else {
@@ -347,20 +386,38 @@ FindElement <- function(M, Structure, k, index = NULL){
 }
 
 FindNbrClusters <- function(M,Structure, k = NULL){
-  if (is.null(k)){
-    nbr_group <- length(Structure$groups)
-
-    Eigen_list <- function(group){
-      if (length(group)>1){
-        D <- diag(rowSums(M[group,group])) # degree matrix
-        L <- D-M[group,group]
-        svd <- eigen(L) 
-        eigenvalues <- sort(svd$values)
-      } else {
-        eigenvalues <- NA
-      }
-      return(eigenvalues)
+  nbr_group <- length(Structure$groups)
+ 
+  Eigen_list <- function(group){
+    if (length(group)>1){
+      D <- diag(rowSums(M[group,group])) # degree matrix
+      L <- D-M[group,group]
+      svd <- eigen(L) 
+      eigenvalues <- sort(svd$values)
+    } else {
+      eigenvalues <- NA
     }
+    return(eigenvalues)
+  }
+  
+  Gap <- function(eigenvalue){
+    if (length(eigenvalue)==1){
+      nbr_cluster <- 1
+    } else {
+      gap <- c()
+      for (i in (2:length(eigenvalue))){
+        gap <- c(gap,eigenvalue[i]-eigenvalue[i-1])
+      }
+      gap_ecart <- c(gap,0)-c(0,gap)
+      nbr_cluster <- which(gap_ecart[2:length(gap_ecart)]>0.20)[1]+1
+      if (is.na(nbr_cluster)){
+        nbr_cluster=1
+      }
+    }
+    return(nbr_cluster)
+  }
+  
+  if (is.null(k)){
     if (nbr_group>1){
       eigenvalues <- lapply(X = c(Structure$groups,list(all=c(1:ncol(M)))),FUN = Eigen_list)
     } else {
@@ -374,22 +431,7 @@ FindNbrClusters <- function(M,Structure, k = NULL){
       }
       legend("bottomright",legend = c("All nodes",paste0("Connected component ",c(1:nbr_group))),col=c("black",rainbow(nbr_group)[1:nbr_group]),lty=1)
     }
-    Gap <- function(eigenvalue){
-      if (length(eigenvalue)==1){
-        nbr_cluster <- 1
-      } else {
-        gap <- c()
-        for (i in (2:length(eigenvalue))){
-          gap <- c(gap,eigenvalue[i]-eigenvalue[i-1])
-        }
-        gap_ecart <- c(gap,0)-c(0,gap)
-        nbr_cluster <- which(gap_ecart[2:length(gap_ecart)]>0.20)[1]+1
-        if (is.na(nbr_cluster)){
-          nbr_cluster=1
-        }
-      }
-      return(nbr_cluster)
-    }
+
     gaps <- lapply(X = eigenvalues,FUN = Gap)
     par(xpd=FALSE) 
     for (i in (1:length(gaps))){
@@ -405,9 +447,36 @@ FindNbrClusters <- function(M,Structure, k = NULL){
       print(paste0("The optimal number of clusters is ",nbr_clusters_total,"."))
       print(paste0(c("Here,",nbr_group,"connected components were detected. Each of them should be clustered into",unlist(gaps[1:nbr_group]),"clusters."),collapse=" "))
     }
-  } else {
+    
+  } else if (nbr_group==1 && !is.null(k)){
     nbr_clusters_total <- k
     gaps <- list(all=k)
+    print(paste0("The provided number of clusters is ",nbr_clusters_total,"."))
+    
+  } else {
+    # k is provided but there are more than one component
+    eigenvalues <- lapply(X = c(Structure$groups,list(all=c(1:ncol(M)))),FUN = Eigen_list)
+    par(mfrow=c(1,1))
+    plot(eigenvalues$all,main="Eigenvalues of the Laplacian matrix",ylab="Eigenvalues",xlab="",type="b")
+    for (i in (1:nbr_group)){
+      points(eigenvalues[[i]],col=rainbow(nbr_group)[i],type="b")
+    }
+    legend("bottomright",legend = c("All nodes",paste0("Connected component ",c(1:nbr_group))),col=c("black",rainbow(nbr_group)[1:nbr_group]),lty=1)
+
+    gaps <- lapply(X = eigenvalues,FUN = Gap)
+    par(xpd=FALSE) 
+    for (i in (1:length(gaps))){
+      color <- c(rainbow(nbr_group),"black")
+      abline(v=gaps[[i]],col=color[i],ylim=c(0,10),lty=3)
+    }
+    
+    if (sum(unlist(gaps)[1:(length(gaps)-1)]) != k){
+      # there is a problem
+      gaps[[(length(gaps)-1)]] <- k-sum(unlist(gaps)[1:(length(gaps)-2)])
+    }
+    nbr_clusters_total <- sum(unlist(gaps)[1:(length(gaps)-1)])
+    print(paste0("The provided number of clusters is ",k,"."))
+    print(paste0(c("Here,",nbr_group,"connected components were detected. Each of them should be clustered into",unlist(gaps[1:nbr_group]),"clusters."),collapse=" "))
   }
   return(list(nbr_clusters=gaps,nbr_clusters_total=nbr_clusters_total))
 }
