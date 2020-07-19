@@ -1,103 +1,268 @@
-n_small<- c(10,20,50)
-n_large <- c(100,200,500)
-k_small <- c(2,3,4,5)
-#k_large <- c(5,10,20)
-p_int <- c(0.01,0.2,0.25,0.50)
+n_small<- c(10,20,50,100)
+k_small <- c(2,3,4,5,10)
+p_int <- c(0.01,0.1,0.2,0.25,0.5)
 p_ext <- p_int
-#=permn(p_int)
 
+path <- "/Users/mchampion/Desktop/l1_spectralclustering/l1spectralclustering/"
+# path <- "/Users/camille/Desktop/Algorithmes/Spectral_Clustering/"
 
-
-
-for(n in 1:length(n_small) ){
-  for(k in 1:length(k_small)){
-    for(i in 1:length(p_int)){
-      for (j in 1:length(p_ext)){
-        p_in <- p_int[i]
-        p_ext <- p[[j]]
+# creation des graphes
+for(nit in 1:length(n_small)){
+  for(kit in 1:length(k_small)){
+    for(iit in 1:length(p_int)){
+      for (jit in 1:length(p_ext)){
         graphs <- list()
-        data <- CreateDataSet(k=k_small[k],n=n_small[n],p=list(p_inside=p_int[i],p_outside=p_ext[j]),print.plot = TRUE)
+        data <- CreateDataSet(k=k_small[kit],n=n_small[nit],p=list(p_inside=p_int[iit],p_outside=p_ext[jit]),print.plot = TRUE)
         ClustersLength <- data$ClustersLength
         graphs <-  c(graphs,list(data))
         for(c in 2:100){
-          data <- CreateDataSet(k=k_small[k],n=n_small[n],p=list(p_inside=p_int[i],p_outside=p_ext[j]),print.plot = FALSE,ClustersLength = ClustersLength)
+          data <- CreateDataSet(k=k_small[kit],n=n_small[nit],p=list(p_inside=p_int[iit],p_outside=p_ext[jit]),print.plot = FALSE,ClustersLength = ClustersLength)
           
           graphs <-  c(graphs,list(data))
         }
         names(graphs) <- paste0("Graph",1:100)
-        save(graphs,file=paste0("/Users/camille/Desktop/Algorithmes/Spectral_Clustering/data/data_n=",n_small[n],"_k=",k_small[k],"_p_inside=",p_int[i],"_p_outside=",p_ext[j],".Rdata"))
+        save(graphs,file=paste0(path,"data/data_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
       }
     }
   }
 }
 
-
-T1<-Sys.time()
-results <- l1_spectralclustering(M=data$A_hat)
-T2<-Sys.time()
-
-Tdiff= difftime(time2, time1)
-
-######## attention afficher en plus de A clusterslength 
-# refaire tourner le code avec 
-
-ideal_com <- function(ClustersLength=data$ClustersLength,A=data$A){
-  mat=data$A+diag(dim(data$A)[2])
-  perfect <- matrix(0,sum(data$ClustersLength),length(ClustersLength))
-  for(i in 1:length(data$ClustersLength)){
-    perfect[,i]<- mat[,cumsum(data$ClustersLength)[i]]
-  }
-  return(perfect)
-}
-######ROC
-library(ROCR)
-real <- ideal_com[data$ClustersLength,data$A]
-pred <- prediction(results,real)
-pred
-
-#######score 
-scoring_detection=function(predicted,cluster){
-  lclust <-length(cluster) 
-  z <- length(which(predicted==0)) 
-  if(z!=0){ 
-    core <- which(predicted==0)
-    cluster <- cluster[-core]
-    predicted <- predicted[-core]
-  }
-  S <- matrix(0,ncol=length(unique(predicted)),nrow=1)
-  for (i in 1:length(unique(predicted))){
-    L <- which(predicted==i) 
-    nbclust <- unique(cluster[L]) 
-    if (length(nbclust)==1){
-      S[i]=length(L)
-    }
-    else{
-      l=matrix(0,ncol=length(nbclust),nrow=1)
-      for (j in 1:length(nbclust)){
-        l[j]=length(which(cluster[L]==nbclust[j])) 
+# run the code
+for(nit in 1:length(n_small) ){
+  for(kit in 1:length(k_small)){
+    for(iit in 1:length(p_int)){
+      for (jit in 1:length(p_ext)){
+        load(paste0(path,"data/data_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
+        Results <- list()
+        Tdiff <- c()
+        NMI <- c()
+        for (l in 1:100){
+          graph <- graphs[[l]]
+          T1 <- Sys.time()
+          results <- l1_spectralclustering(M=graph$A_hat,pen="autre")
+          T2 <- Sys.time()
+          tdiff= difftime(T2, T1)
+          Tdiff <- c(Tdiff,tdiff)
+          nmi <- Compute_NMIscore(comm=results$comm,A=graph$A,method="l1")
+          NMI <- c(NMI,nmi)
+          Results <- c(Results,list(results))
+        }
+        Results <- c(Results,list(Tdiff),list(NMI))
+        names(Results) <- c(paste0("Graphs",1:100),"ProcTime","NMI")
+        save(Results,file=paste0(path,"results/Results_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
       }
-      max <- max(l) 
-      S[i]=max
     }
   }
-  Scoring <- (1/lclust)*sum(S)
-  return(Scoring)
 }
 
-####temps de calcul
-ptm=proc.time()
-##algo a enregistrer
-proc.time()-ptm
-
-######spectral reality
-spec_result<- scoring_detection(spec,s1)
-
-
-######## core reality
-s1 <- rep(1,83)
-for (i in 2:100){
-  s <- rep(i,83)
-  s_tot <- c(s1,s)
-  s1=s_tot
+# l1 - with predefined indices
+for(nit in 1:length(n_small) ){
+  for(kit in 1:length(k_small)){
+    for(iit in 1:length(p_int)){
+      for (jit in 1:length(p_ext)){
+        load(paste0(path,"data/data_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
+        Results <- list()
+        Tdiff <- c()
+        NMI <- c()
+        for (l in 1:100){
+          graph <- graphs[[l]]
+          UneBoucle <- function(graph,K=NULL){
+            ScoreNMI <- c()
+            Tps_total <- c()
+            Community_total <- list()
+          
+            StructureReal <- FindStructure(graph$A)
+            Structure <- FindStructure(graph$A_hat)
+          
+            # if more than one component, define a number of clusters by component
+            Comm <- list()
+            Tps <- list()
+            if (is.null(K)){
+              K <- c()
+            }
+            for (i in (1:length(Structure$groups))){
+              indices <- Structure$groups[[i]]
+              
+              if (length(indices)>1){
+                loc <- c()
+                for (j in (1:length(indices))){
+                  I <- sapply(StructureReal$groups, FUN = function(x){
+                    I <- length(which(x==indices[[j]]))
+                  })
+                  loc <- c(loc,which(I>0))
+                }
+                if (is.null(K)){
+                  k <- length(unique(loc))
+                  K <- c(K,k)
+                } else {
+                  k <- K[i]
+                }
+            
+                Mtmp <- graph$A_hat[Structure$groups[[i]],Structure$groups[[i]]]
+                Mtmp_real <- graph$A[Structure$groups[[i]],Structure$groups[[i]]]
+                StructureReal_tmp <- FindStructure(Mtmp_real)
+            
+                comb <- StructureReal_tmp$groups %>%
+                    cross()
+                indicesBis <- list()
+                Rand <- sample(1:length(comb),100)
+                #for (t in (1:length(comb))){
+                for (u in (1:length(Rand))){
+                  t <- Rand[u]
+                  indicesBis <- c(indicesBis,list(unlist(comb[[t]])))
+                }
+            
+                results_tmp <- c()
+                tdiff_tmp <- c()
+                nmi_tmp <- c()
+                
+                for (t in (1:length(indicesBis))){
+                  T1 <- Sys.time()
+                  results <- l1_spectralclustering(M=Mtmp,pen="autre",k = k,index = indicesBis[[t]])
+                  if (ncol(results$comm)!=k){
+                    comm_tmp <- matrix(0,nrow=nrow(results$comm),ncol=k)
+                    comm_tmp[,1:ncol(results$comm)] <- results$comm
+                    results$comm <- comm_tmp
+                  }
+                  T2 <- Sys.time()
+                  tdiff = difftime(T2, T1)
+                  tdiff_tmp <- c(tdiff_tmp,tdiff)
+                  results_tmp <- c(results_tmp,list(results$comm))
+                } 
+                Tps <- c(Tps, list(tdiff_tmp))
+                Comm <- c(Comm,list(results_tmp))
+              } else {
+                K <- c(K,1)
+                indicesBis <- list(1)
+                Comm <- c(Comm,list(rep(1,1)))
+                Tps <- c(Tps,list(0))
+              }
+            }
+            names(Tps) = names(Comm) <- names(Structure$groups)
+            
+            if (length(Comm)>1){
+              comb <- Structure$groups %>%
+                cross()
+              indicesBis <- list()
+              for (t in (1:length(comb))){
+                indicesBis <- c(indicesBis,list(unlist(comb[[t]])))
+              }
+          
+              for (t in (1:length(indicesBis))){
+                Community <- matrix(0,nrow=ncol(graph$A),ncol=sum(K))
+                S <- indicesBis[[t]]
+                tps_tmp <- 0
+                for (s in (1:length(S))){
+                  I <- match(S[s],Structure$groups[[s]])
+                  res <- Comm[[s]][[I]]
+                  if (!is.null(ncol(res))){
+                    if (ncol(res)!=K[s]){
+                      res <- cbind(res,rep(0,nrow(res)))
+                    }
+                    if (s==1){
+                      Community[Structure$groups[[s]],1:ncol(res)] <- res
+                    } else {
+                      Community[Structure$groups[[s]],(cumsum(K)[s-1]+1):cumsum(K)[s]] <- res
+                    }
+                  } else {
+                    if (s==1){
+                      Community[Structure$groups[[s]],1] <- res
+                    } else {
+                      Community[Structure$groups[[s]],(cumsum(K)[s-1]+1):cumsum(K)[s]] <- res
+                    }
+                  }
+                  tps_tmp <- tps_tmp + Tps[[s]][[I]]
+                }
+                score <- Compute_NMIscore(comm=Community,A=graph$A,method="l1")
+                ScoreNMI <- c(ScoreNMI,score)
+                Tps_total <- c(Tps_total,tps_tmp)
+                Community_total <- c(Community_total,list(Community))
+              }
+            } else {
+              for (s in (1:length(Comm[[1]]))){
+                Community <- Comm[[1]][[s]]
+                score <- Compute_NMIscore(comm=Community,A=graph$A,method="l1")
+                ScoreNMI <- c(ScoreNMI,score)
+                Tps_total <- c(Tps_total, Tps[[1]][[s]])
+                Community_total <- c(Community_total,list(Community))
+              }
+            }
+            I <- which.max(ScoreNMI)
+            return(list(Results=Community_total[[I]],Tdiff=Tps_total[I],NMI=ScoreNMI[I]))
+          }
+          UneBoucle2 <- possibly(UneBoucle, otherwise = list(Results=NA,Tdiff=NA,NMI=NA))
+          
+          results <- UneBoucle2(graph)
+          Results <- c(Results,list(results$Results)) 
+          Tdiff <- c(Tdiff,results$Tdiff)
+          NMI <- c(NMI,results$NMI)
+        }
+        Results <- c(Results,list(Tdiff),list(NMI))
+        names(Results) <- c(paste0("Graphs",1:100),"ProcTime","NMI")
+        save(Results,file=paste0(path,"results/IndicResults_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
+      }
+    }
+  }
 }
-scoring_detection(core[,2],s1)
+        
+# spectral clustering
+library(anocva)
+for(nit in 1:length(n_small) ){
+  for(kit in 1:length(k_small)){
+    for(iit in 1:length(p_int)){
+      for (jit in 1:length(p_ext)){
+        load(paste0(path,"data/data_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
+        Results <- list()
+        Tdiff <- c()
+        NMI <- c()
+        for (l in (1:100)){
+          graph <- graphs[[l]]
+          T1 <- Sys.time()
+          spectral <- spectralClustering(graph$A_hat,k=length(graph$ClustersLength))
+          T2 <- Sys.time()
+          tdiff = difftime(T2, T1)
+          Tdiff <- c(Tdiff,tdiff)
+          score <- Compute_NMIscore(comm=spectral,A=graph$A,method="spectral")
+          NMI <- c(NMI,score)
+          Results <- c(Results,list(spectral))
+        }
+        Results <- c(Results,list(Tdiff),list(NMI))
+        names(Results) <- c(paste0("Graphs",1:100),"ProcTime","NMI")
+        save(Results,file=paste0(path,"results/SpectralClustering_Results_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
+      }
+    }
+  }
+}
+
+# recuperer la taille des clusters
+load(paste0(path,"results/Results_n=",10,"_k=",2,"_p_inside=",0.1,"_p_outside=",0.1,".Rdata"))
+k <- c()
+for (l in (1:100)){
+  k <- c(k,ncol(Results[[l]]$comm))
+}
+
+load("~/Desktop/l1_spectralclustering/l1spectralclustering/results/Scores.rdata")
+scores <- c(scores[,1],scores[,2],score2)
+scores <- data.frame(cbind(scores=scores,method=c(rep("l1",100),rep("spectral",100),rep("indic",100)),clusters=c(k,rep(2,200))))
+scores$scores <- as.numeric(as.character(scores$scores))
+scores$clusters <- as.numeric(as.character(scores$clusters))
+boxplot(scores~method,data=scores)
+I <- which(scores$clusters==2)      
+boxplot(scores~method,data=scores[I,])
+
+load("~/Dropbox/L1Spectral/results/Results_n=50_k=5_p_inside=0.25_p_outside=0.25.Rdata")
+ResultsL1 <- Results$NMI
+k <- c()
+for (l in (1:100)){
+  k <- c(k,ncol(Results[[l]]$comm))
+}
+load("~/Dropbox/L1Spectral/results/SpectralClustering_Results_n=50_k=5_p_inside=0.25_p_outside=0.25.Rdata")
+ResultsSpec <- Results$NMI
+
+scores <- data.frame(cbind(scores=c(ResultsL1,ResultsSpec),method=c(rep("l1",100),rep("spectral",100)),clusters=c(k,rep(5,100))))
+scores$scores <- as.numeric(as.character(scores$scores))
+scores$clusters <- as.numeric(as.character(scores$clusters))
+boxplot(scores~method,data=scores)
+
+I <- which(scores$clusters==5)      
+boxplot(scores~method,data=scores[I,])
