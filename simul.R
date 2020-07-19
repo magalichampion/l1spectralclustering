@@ -58,7 +58,7 @@ for(n in 1:length(n_small) ){
         score_spec <- c()
         for(l in 1:100){
           if(is.na(Results_l1[[l]])==TRUE){
-            score<-c("NA")
+            score<-c(score,NA)
           }else{
           clusters_pred <- clust_appt(ideal=Results_l1[[l]]$comm)
           score<- c(score,NMI(cbind(c(1:length(clusters_pred)),clusters_pred),cbind(c(1:length(clusters_real)),clusters_real))$value)
