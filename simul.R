@@ -1,31 +1,20 @@
 
-files <- list.files(here("results"))
-nb_files <- length(files_names)
-data_names <- vector("list",length=nb_files)
+library(anocva)
+library(NMI)
 
-files_names <- list.files(path=here("results"))
-files_names
-nb_files <- length(files_names)
-#data_names <- vector("list",length=nb_files)
-
-files_names2 <- list.files(path=here("data"))
-files_names2
-nb_files2 <- length(files_names2)
-
-for (i in 1:nb_files){
-  load(files_names[i])
-  real<-ideal_com(ClustersLength=data$ClustersLength,A=data$A)
-  pred <- prediction(results,real)
-  clusters_pred <- clust_appt(ideal=results)
-  clusters_real <- clust_appt(ideal=real)
-  score <- NMI(cbind(c(1:length(clusters_pred)),clusters_pred),cbind(c(1:length(clusters_real)),clusters_real))
+ideal_com <- function(ClustersLength=data$ClustersLength,A=data$A){
+  mat=A+diag(dim(A)[2])
+  perfect <- matrix(0,sum(ClustersLength),length(ClustersLength))
+  for(i in 1:length(ClustersLength)){
+    perfect[,i]<- mat[,cumsum(ClustersLength)[i]]
+  }
+  return(perfect)
 }
 
-load("Results_n=10_k=2_p_inside=0.1_p_outside=0.1.Rdata")
-Results_l1 <- Results
-load("data_n=10_k=2_p_inside=0.1_p_outside=0.1.Rdata")
-load("SpectralClustering_Results_n=10_k=2_p_inside=0.1_p_outside=0.1.Rdata")
-Results_spec <- Results
+clust_appt <- function(ideal=perfect){
+  new <- ideal%*%c(1:dim(ideal)[2])
+  return(new)
+}
 
 n_small<- c(10,20,50)
 n_large <- c(100,200,500)
@@ -46,7 +35,7 @@ for(n in 1:length(n_small) ){
         Results_spec <- Results
         
         # l1
-        load(paste0("/Users/camille//Documents/articlespectral/l1spectralclustering/results/Results_n=",n_small[n],"_k=",k_small[k],"_p_inside=",p_int[i],"_p_outside=",p_ext[j],".Rdata"))
+        load(paste0("/Users/camille/Documents/articlespectral/l1spectralclustering/results/Results_n=",n_small[n],"_k=",k_small[k],"_p_inside=",p_int[i],"_p_outside=",p_ext[j],".Rdata"))
         Results_l1 <- Results
         
         # real
@@ -70,10 +59,10 @@ for(n in 1:length(n_small) ){
         Results_spec<- c(Results_spec,list(NMI=score_spec))
 
         Results <- Results_l1
-        save(Results,file=paste0("/Users/camille//Documents/articlespectral/l1spectralclustering/results/Results_n=",n_small[n],"_k=",k_small[k],"_p_inside=",p_int[i],"_p_outside=",p_ext[j],".Rdata"))
+        save(Results,file=paste0("/Users/camille/Documents/articlespectral/l1spectralclustering/results/Results_n=",n_small[n],"_k=",k_small[k],"_p_inside=",p_int[i],"_p_outside=",p_ext[j],".Rdata"))
         
         Results <- Results_spec
-        save(Results,file=paste0("/Users/camille//Documents/articlespectral/l1spectralclustering/results/SpectralClustering_Results_n=",n_small[n],"_k=",k_small[k],"_p_inside=",p_int[i],"_p_outside=",p_ext[j],".Rdata"))
+        save(Results,file=paste0("/Users/camille/Documents/articlespectral/l1spectralclustering/results/SpectralClustering_Results_n=",n_small[n],"_k=",k_small[k],"_p_inside=",p_int[i],"_p_outside=",p_ext[j],".Rdata"))
         
       }
     }
@@ -81,16 +70,3 @@ for(n in 1:length(n_small) ){
 }
 
 
-real<-ideal_com(ClustersLength=graphs[[1]]$ClustersLength,A=graphs[[1]]$A)
-clusters_real <- clust_appt(ideal=real)
-score<- c()
-score_spec <- c()
-for(i in 1:100){
-   clusters_pred <- clust_appt(ideal=Results_l1[[i]]$comm)
-   score[i] <- NMI(cbind(c(1:length(clusters_pred)),clusters_pred),cbind(c(1:length(clusters_real)),clusters_real))
-   score_spec[i] <- NMI(cbind(c(1:length(Results_spec[[i]])),Results_spec[[i]]),cbind(c(1:length(clusters_real)),clusters_real))
-}
-score_l1=unlist(score)
-score_spectral <- unlist(score_spec)
-scores<-cbind(score_l1,score_spectral)
-save(scores,file="Scores.rdata")
