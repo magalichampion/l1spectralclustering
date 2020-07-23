@@ -64,7 +64,7 @@ for(nit in 1:length(n_small) ){
         Results <- list()
         Tdiff <- c()
         NMI <- c()
-        for (l in 1:100){
+        for (l in 2:100){
           graph <- graphs[[l]]
           UneBoucle <- function(graph,K=NULL){
             ScoreNMI <- c()
@@ -102,10 +102,19 @@ for(nit in 1:length(n_small) ){
                 Mtmp_real <- graph$A[Structure$groups[[i]],Structure$groups[[i]]]
                 StructureReal_tmp <- FindStructure(Mtmp_real)
             
-                comb <- StructureReal_tmp$groups %>%
-                    cross()
+                if (length(indices)==100){
+                  load(paste0(path,"comb.Rdata"))
+                } else {
+                  #comb <- StructureReal_tmp$groups %>%
+                  #    cross()
+                  comb=NULL
+                }
                 indicesBis <- list()
-                Rand <- sample(1:length(comb),100)
+                if (length(comb)>100){
+                  Rand <- sample(1:length(comb),100)
+                } else {
+                  Rand <- 1:length(comb)
+                }
                 #for (t in (1:length(comb))){
                 for (u in (1:length(Rand))){
                   t <- Rand[u]
