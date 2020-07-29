@@ -2,6 +2,7 @@ n_small<- c(10,20,50,100)
 k_small <- c(2,3,4,5,10)
 p_int <- c(0.01,0.1,0.2,0.25,0.5)
 p_ext <- p_int
+##### this is the last version
 
 path <- "/Users/mchampion/Desktop/l1_spectralclustering/l1spectralclustering/"
 # path <- "/Users/camille/Desktop/Algorithmes/Spectral_Clustering/"
@@ -64,7 +65,7 @@ for(nit in 1:length(n_small) ){
         Results <- list()
         Tdiff <- c()
         NMI <- c()
-        for (l in 2:100){
+        for (l in 1:100){
           graph <- graphs[[l]]
           UneBoucle <- function(graph,K=NULL){
             ScoreNMI <- c()
@@ -91,8 +92,12 @@ for(nit in 1:length(n_small) ){
                   })
                   loc <- c(loc,which(I>0))
                 }
-                if (is.null(K)){
-                  k <- length(unique(loc))
+                if (length(K)<length(Structure$groups)){
+                  if (length(K)==(length(Structure$groups)-1)){
+                    k <- length(StructureReal$groups) - sum(K)
+                  } else {
+                    k <- length(which(table(loc)>1))
+                  }
                   K <- c(K,k)
                 } else {
                   k <- K[i]
@@ -105,9 +110,9 @@ for(nit in 1:length(n_small) ){
                 if (length(indices)==100){
                   load(paste0(path,"comb.Rdata"))
                 } else {
-                  #comb <- StructureReal_tmp$groups %>%
-                  #    cross()
-                  comb=NULL
+                  comb <- StructureReal_tmp$groups %>%
+                      cross()
+                  #comb=NULL
                 }
                 indicesBis <- list()
                 if (length(comb)>100){
@@ -118,7 +123,8 @@ for(nit in 1:length(n_small) ){
                 #for (t in (1:length(comb))){
                 for (u in (1:length(Rand))){
                   t <- Rand[u]
-                  indicesBis <- c(indicesBis,list(unlist(comb[[t]])))
+                  petiteliste <- unlist(comb[[t]])
+                  indicesBis <- c(indicesBis,list(tail(petiteliste,k)))
                 }
             
                 results_tmp <- c()
@@ -141,7 +147,9 @@ for(nit in 1:length(n_small) ){
                 Tps <- c(Tps, list(tdiff_tmp))
                 Comm <- c(Comm,list(results_tmp))
               } else {
-                K <- c(K,1)
+                if (length(K)<length(Structure$groups)){
+                  K <- c(K,1)
+                }
                 indicesBis <- list(1)
                 Comm <- c(Comm,list(rep(1,1)))
                 Tps <- c(Tps,list(0))
@@ -150,11 +158,15 @@ for(nit in 1:length(n_small) ){
             names(Tps) = names(Comm) <- names(Structure$groups)
             
             if (length(Comm)>1){
-              comb <- Structure$groups %>%
+              index <- list()
+              for (g in (1:length(Comm))){
+                index <- c(index,list(1:length(Comm[[g]])))
+              }
+              comb2 <- index %>%
                 cross()
               indicesBis <- list()
-              for (t in (1:length(comb))){
-                indicesBis <- c(indicesBis,list(unlist(comb[[t]])))
+              for (t in (1:length(comb2))){
+                indicesBis <- c(indicesBis,list(unlist(comb2[[t]])))
               }
           
               for (t in (1:length(indicesBis))){
@@ -162,8 +174,7 @@ for(nit in 1:length(n_small) ){
                 S <- indicesBis[[t]]
                 tps_tmp <- 0
                 for (s in (1:length(S))){
-                  I <- match(S[s],Structure$groups[[s]])
-                  res <- Comm[[s]][[I]]
+                  res <- Comm[[s]][[S[s]]]
                   if (!is.null(ncol(res))){
                     if (ncol(res)!=K[s]){
                       res <- cbind(res,rep(0,nrow(res)))
@@ -180,7 +191,7 @@ for(nit in 1:length(n_small) ){
                       Community[Structure$groups[[s]],(cumsum(K)[s-1]+1):cumsum(K)[s]] <- res
                     }
                   }
-                  tps_tmp <- tps_tmp + Tps[[s]][[I]]
+                  tps_tmp <- tps_tmp + Tps[[s]][[S[s]]]
                 }
                 score <- Compute_NMIscore(comm=Community,A=graph$A,method="l1")
                 ScoreNMI <- c(ScoreNMI,score)
