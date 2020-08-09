@@ -1,5 +1,7 @@
 library(glmnet)
 library(igraph)
+library(NMI)
+library(purrr)
 
 # code l1 spectral clustering - v3
 data <- CreateDataSet(k=3,n=10,p=list(p_inside=0.1,p_outside=0.1),print.plot = TRUE)
