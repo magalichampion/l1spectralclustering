@@ -13,7 +13,7 @@ for(nit in 1:length(n_small)){
     for(iit in 1:length(p_int)){
       for (jit in 1:length(p_ext)){
         graphs <- list()
-        data <- CreateDataSet(k=k_small[kit],n=n_small[nit],p=list(p_inside=p_int[iit],p_outside=p_ext[jit]),print.plot = TRUE)
+        data <- CreateDataSet(k=k_small[kit],n=n_small[nit],p=list(p_inside=p_int[iit],p_outside=p_ext[jit]),print.plot = TRUE,ClustersLength = rep(10,10))
         ClustersLength <- data$ClustersLength
         graphs <-  c(graphs,list(data))
         for(c in 2:100){
@@ -22,7 +22,7 @@ for(nit in 1:length(n_small)){
           graphs <-  c(graphs,list(data))
         }
         names(graphs) <- paste0("Graph",1:100)
-        save(graphs,file=paste0(path,"data/data_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],".Rdata"))
+        save(graphs,file=paste0(path,"data/data_n=",n_small[nit],"_k=",k_small[kit],"_p_inside=",p_int[iit],"_p_outside=",p_ext[jit],"_eq.Rdata"))
       }
     }
   }
