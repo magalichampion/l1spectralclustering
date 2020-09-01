@@ -2,6 +2,7 @@ library(glmnet)
 library(igraph)
 library(NMI)
 library(purrr)
+library(pracma)
 
 # code l1 spectral clustering - v3
 data <- CreateDataSet(k=3,n=10,p=list(p_inside=0.1,p_outside=0.1),print.plot = TRUE)
@@ -185,7 +186,6 @@ l1spectral <- function(M, k, elements,pen){
         eigenvectors_tmp <- eigenvectors
         comm <- c()
         for (i in (1:k)){
-      
           # 3rd step: check the indices (only if i>1)
           if (i>1){
             if (length(which(v[indices[-(i-1)]]>0))>0){
@@ -308,16 +308,17 @@ Lasso <- function(U, n, indices, iteration,pen,k){
   #    abline(h=cvtop)
       
    #   sol <- glmnet(W,-w,lambda=lambda_opt)
-      sol <- glmnet(W,-w,lambda=0)
-      sol <- sol$beta
-      solution <- as.matrix(sol)
+   #   sol <- glmnet(W,-w,lambda=0)
+  #    sol <- sol$beta
+  #    solution <- as.matrix(sol)
       
-      I <- which(solution!=0)
+   #   I <- which(solution!=0)
       sol2 <- glmnet(W,-w,lambda=0)
       sol2 <- sol2$beta
       sol2 <- as.matrix(sol2)
       sol2[which(sol2<0.5)] <- 0
-      solution[I] <- sol2[I]
+      solution <- sol2
+     # solution[I] <- sol2[I]
     }
     if(indices[iteration]==1){
       v <- c( 1 ,solution[indices[iteration]:length(solution)])
@@ -509,18 +510,21 @@ FindStructure <- function(M){
 }
 
 GramSchmidt <- function(U){
-  v <- U
-  B <- matrix(0,dim(U)[1],dim(U)[2])
-  B[,1]=v[,1]/sqrt(sum(v[,1]^2))
-  for(i in 2:(dim(U)[2])){
-    res=v[,i]
+  #v <- U
+  #B <- matrix(0,dim(U)[1],dim(U)[2])
+  #B[,1]=v[,1]/sqrt(sum(v[,1]^2))
+  #for(i in 2:(dim(U)[2])){
+  #  res=v[,i]
     
-    for(j in 1:(i-1)){
-      res=res-(crossprod(B[,j],v[,i])*B[,j]/sqrt(sum(B[,j]^2)))
-    }
+  #  for(j in 1:(i-1)){
+  #    res=res-(crossprod(B[,j],v[,i])*B[,j]/sqrt(sum(B[,j]^2)))
+  #  }
     
-    B[,i]=res
-    B[,i]=B[,i]/sqrt(sum(B[,i]^2))
-  }
+  #  B[,i]=res
+  #  B[,i]=B[,i]/sqrt(sum(B[,i]^2))
+  #}
+  #B <- gramSchmidt(U)
+  B <- grahm_schimdtCpp(A)
+  B <- B$Q
   return(B)
 }
