@@ -1,0 +1,66 @@
+---
+title: "Compute performance"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Compute performance}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(l1spectralclustering)
+```
+
+In this vignette, we describe how to use the function `Compute_performance()`. This function evaluates the performance of a clustering algorithm (e.g., the $\ell_1$-clustering algorithm) by comparing its output against the ground-truth adjacency matrix.
+
+
+```{r}
+# Example: loading one simulated data set and its corresponding learned result
+
+# Define simulation parameters
+n <- 50
+d <- 0.1
+p_inside <- 0.1
+p_outside <- 0.25
+
+# Construct the filenames and paths
+data_path <- file.path(path.package("l1spectralclustering"), "data")
+results_path <- file.path(path.package("l1spectralclustering"), "results")
+file_suffix <- sprintf("n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", n, d, p_inside, p_outside)
+data_file    <- file.path(data_path, paste0("data_", file_suffix))
+results_file <- file.path(results_path, paste0("results_", file_suffix))
+
+# Load the simulated data
+if (file.exists(data_file)) {
+  load(data_file)
+  data_example <- graphs[[1]]
+} else {
+  stop("Simulated data file not found at: ", data_file)
+}
+
+# Load the clustering results
+if (file.exists(results_file)) {
+  load(results_file)
+  res_example <- Results[[1]]
+} else {
+  warning("Clustering results not found at: ", results_file, ". You may need to run the algorithm first.")
+}
+
+# Convert membership matrix to vector, assigning 0 to nodes with no membership
+clus_vector <- apply(res_example$comm, 1, function(row) {
+  if (all(row == 0)) {
+    return(0) 
+  } else {
+    return(which.max(row))
+  }
+})
+
+# Compute performance
+results <- ComputePerformance(clus_vector, data_example$A)
+```
+
+Add the generation of the figures. Also add an example where we use another algorithm.

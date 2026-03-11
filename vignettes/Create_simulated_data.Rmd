@@ -1,0 +1,85 @@
+---
+title: "Create simulated data"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Create simulated data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(l1spectralclustering)
+```
+
+# Create simulated data for a set of parameters
+```{r}
+# set the parameters to simulate data
+k <- 2 # number of clusters
+n <- 100 # number of nodes
+p <- list(p_inside = 0.1, p_outside = 0.05) # perturbations
+rngSEED <- 12345L
+
+# run the code to simulate the data
+data <- CreateDataSet(k, n, p, rngSEED)
+```
+
+# Create simulated data for all possible combinations of parameters
+```{r}
+# set the parameters
+path_data <- here::here("data")
+if (!dir.create(path_data, showWarnings = FALSE)) {
+  message("Data folder already exists or was created.")
+}
+
+density_range <- c(0.01,0.02,0.1,0.2) # "density" of the graph (k/n)
+n_range <- c(50,100,500,1000) # number of nodes
+p_inside_range <- c(0.01,0.1,0.25,0.5)
+p_outside_range <- c(0.01,0.1,0.25,0.5)
+rngSEED <- 12345L
+n_graphs <- 100 # number of perturbed graphs to simulate
+
+# run the code to simulate the data
+for(n in n_range){
+  for(d in density_range){
+    for(p_inside in p_inside_range){
+      for (p_outside in p_outside_range){
+        
+        graphs <- list() # to store the simulated graphs
+        
+        ClustersLength <- rep(floor(1/d),d*n)
+        
+        if (length(ClustersLength)>1){
+          # there should be at least two clusters
+          if (sum(ClustersLength)!=n){
+            ClustersLength[length(ClustersLength)] <- n-sum(ClustersLength[-length(ClustersLength)])
+          }
+          data <- CreateDataSet(k=d*n, n=n, p=list(p_inside=p_inside,p_outside=p_outside), print.plot = TRUE, ClustersLength = ClustersLength)
+          ClustersLength <- data$ClustersLength
+          
+          graphs <-  c(graphs,list(data))
+          for(c in 2:n_graphs){
+            data <- CreateDataSet(k=d*n, n=n, p=list(p_inside=p_inside,p_outside=p_outside), print.plot = FALSE, ClustersLength = ClustersLength)
+            
+            graphs <-  c(graphs,list(data))
+          }
+          names(graphs) <- paste0("Graph",1:n_graphs)
+          
+          # Define the specific filename for this (n, density, noise) combination
+          file_name <- sprintf("data_n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", 
+                     n, d, p_inside, p_outside)
+
+          # Construct the full destination path
+          full_path <- file.path(path_data, file_name)
+
+          # Save the 100 perturbed graphs
+          save(graphs, file = full_path)
+        }
+      }
+    }
+  }
+}
+```

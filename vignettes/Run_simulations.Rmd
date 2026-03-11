@@ -1,0 +1,89 @@
+---
+title: "Run simulations"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Run simulations}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(l1spectralclustering)
+```
+
+```{r}
+library(foreach)
+library(doParallel)
+
+# Define simulation parameters
+n <- 500
+d <- 0.02
+p_inside <- 0.01
+p_outside <- 0.01
+current_method <- "l1Spectral"
+
+p_inside_range <- c(0.01,0.1,0.25,0.5)
+p_outside_range <- c(0.01,0.1,0.25,0.5)
+
+    for(p_inside in p_inside_range){
+      for (p_outside in p_outside_range){
+
+# Construct the filenames and paths
+data_path <- file.path(path.package("l1spectralclustering"), "data")
+results_path <- file.path(path.package("l1spectralclustering"), "results")
+file_suffix <- sprintf("n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", n, d, p_inside, p_outside)
+data_file    <- file.path(data_path, paste0("data_", file_suffix))
+results_file <- file.path(results_path, paste0("results_", current_method,"_",file_suffix))
+
+# Load the simulated data
+if (file.exists(data_file)) {
+  load(data_file)
+  data_example <- graphs[[1]]
+} else {
+  stop("Simulated data file not found at: ", data_file)
+}
+
+# Run the code on the length(graphs) graphs
+num_cores <- parallel::detectCores() - 2 
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+results <- foreach(l = 1:length(graphs), 
+                   # Export ALL your custom functions
+                   .export = c("RunSimulations", "Spectral", "regSpectral", "ComputePerformance"),
+                   # Load ALL necessary libraries on the workers
+                   .packages = c("kernlab", "greed", "igraph", "aricode", "purrr")
+) %dopar% {
+  
+  graph_obj <- graphs[[l]]
+  res <- RunSimulations(graph_obj, method = current_method)
+  
+  return(res)
+}
+names(results) <- paste0("Graphs",1:length(graphs))
+
+stopCluster(cl)
+
+# Extract each metric 
+NMI  <- sapply(results, function(x) x$NMI)
+ARI  <- sapply(results, function(x) x$ARI)
+AMI  <- sapply(results, function(x) x$AMI)
+Time <- sapply(results, function(x) x$Time)
+
+results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
+
+# Save the results
+save(results, results, file = results_file)
+
+cat("Saved results to:", results_file, "\n")
+      }
+    }
+```
