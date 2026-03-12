@@ -89,14 +89,23 @@ RunSimulations <- function(graph_obj, method = c("l1Spectral", "Spectral", "regS
 #' @export
 #'
 l1Spectral <- function(A,k = NULL){
-  results <- l1spectral::l1_spectralclustering(A=A,pen="thresholdedLS",k=k, k_max = 50)
-  if (!is.null(ncol(results$comm))){
-    clusters <- results$comm%*%c(1:ncol(results$comm))
-  } else {
-    clusters <- results$comm
+  run_l1Spectral <- function(mat, centers) {
+    results_l1Spectral <- l1spectral::l1_spectralclustering(A=mat,pen="thresholdedLS",k=centers, k_max = 50)
+    if (!is.null(ncol(results_l1Spectral$comm))){
+      clusters <- results_l1Spectral$comm%*%c(1:ncol(results_l1Spectral$comm))
+    } else {
+      clusters <- results_l1Spectral$comm
+    }
+    clusters <- as.vector(clusters)
+    return(clusters)
   }
-  clusters <- as.vector(clusters)
-  return(clusters)
+  
+  # If it fails, return NA so RunSimulations can handle it
+  safe_l1Spectral <- purrr::possibly(run_l1Spectral, otherwise = NA)
+  
+  results <- safe_l1Spectral(A,k)
+  
+  return(results)
 }          
 
 #' Spectral clustering algorithm

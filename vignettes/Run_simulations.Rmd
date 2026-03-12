@@ -19,6 +19,8 @@ knitr::opts_chunk$set(echo = TRUE)
 library(l1spectralclustering)
 ```
 
+The following code demonstrates the workflow for executing a single simulation experiment across multiple graph instances. To run it, the specific simulation parameters (such as the number of nodes $n$, the density of the graph $d$, and perturbation levels $p_{in}$ and $p_{out}$) and select the desired clustering algorithm (e.g., `l1Spectral`) at the beginning of the script.
+
 ```{r}
 library(foreach)
 library(doParallel)
@@ -29,12 +31,6 @@ d <- 0.02
 p_inside <- 0.01
 p_outside <- 0.01
 current_method <- "l1Spectral"
-
-p_inside_range <- c(0.01,0.1,0.25,0.5)
-p_outside_range <- c(0.01,0.1,0.25,0.5)
-
-    for(p_inside in p_inside_range){
-      for (p_outside in p_outside_range){
 
 # Construct the filenames and paths
 data_path <- file.path(path.package("l1spectralclustering"), "data")
@@ -84,6 +80,147 @@ results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
 save(results, results, file = results_file)
 
 cat("Saved results to:", results_file, "\n")
+```
+
+This code builds upon the first one by looping over defined ranges of $n$, $d$, $p_{in}$, and $p_{out}$ using the self-tuned version of the $\ell_1$-spectral clustering algorithm. This specific configuration was used to generate Table 1.
+
+```{r}
+library(foreach)
+library(doParallel)
+
+# Define simulation parameters
+n_range <- c(50,100,500,1000)
+d_range <- c(0.01,0.02,0.1,0.2)
+p_inside_range <- c(0.01,0.1,0.25,0.5)
+p_outside_range <- c(0.01,0.1,0.25,0.5)
+current_method <- "ST_l1Spectral"
+
+for (n in (n_range)){
+  for (d in (d_range)){
+    for (p_inside in p_inside_range){
+      for (p_outside in p_outside_range){
+        # Construct the filenames and paths
+        data_path <- file.path(path.package("l1spectralclustering"), "data")
+        results_path <- file.path(path.package("l1spectralclustering"), "results")
+        file_suffix <- sprintf("n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", n, d, p_inside, p_outside)
+        data_file    <- file.path(data_path, paste0("data_", file_suffix))
+        results_file <- file.path(results_path, paste0("results_", current_method,"_",file_suffix))
+        
+        # Load the simulated data
+        if (file.exists(data_file)) {
+          load(data_file)
+          data_example <- graphs[[1]]
+        } else {
+          stop("Simulated data file not found at: ", data_file)
+        }
+        
+        # Run the code on the length(graphs) graphs
+        num_cores <- parallel::detectCores() - 2 
+        cl <- makeCluster(num_cores)
+        registerDoParallel(cl)
+        
+        results <- foreach(l = 1:length(graphs), 
+                           # Export ALL your custom functions
+                           .export = c("RunSimulations", "Spectral", "regSpectral", "ComputePerformance"),
+                           # Load ALL necessary libraries on the workers
+                           .packages = c("kernlab", "greed", "igraph", "aricode", "purrr")
+        ) %dopar% {
+          
+          graph_obj <- graphs[[l]]
+          res <- RunSimulations(graph_obj, method = current_method)
+          
+          return(res)
+        }
+        names(results) <- paste0("Graphs",1:length(graphs))
+        
+        stopCluster(cl)
+        
+        # Extract each metric 
+        NMI  <- sapply(results, function(x) x$NMI)
+        ARI  <- sapply(results, function(x) x$ARI)
+        AMI  <- sapply(results, function(x) x$AMI)
+        Time <- sapply(results, function(x) x$Time)
+        
+        results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
+        
+        # Save the results
+        save(results, results, file = results_file)
+        
+        cat("Saved results to:", results_file, "\n")       
       }
     }
+  }
+}
+```
+
+The final script executes the full benchmark across all algorithms discussed in the paper. This provides the data necessary for the comparative analysis in Table 2 and the performance visualizations in Figure 3.
+
+```{r}
+library(foreach)
+library(doParallel)
+
+# Define simulation parameters
+settings <- list(c(n=100, d=0.1),c(n=500, d=0.02))
+p_inside_range <- c(0.01,0.1,0.25,0.5)
+p_outside_range <- c(0.01,0.1,0.25,0.5)
+methods <- c("l1Spectral", "Spectral", "regSpectral","robustSpectral","ST_l1spectral", "ST_Spectral", "Hybrid", "MCL")
+
+for (s in (settings)){
+  for (current_method in (methods)){
+    for (p_inside in p_inside_range){
+      for (p_outside in p_outside_range){
+        n <- s["n"]
+        d <- s["d"]
+        # Construct the filenames and paths
+        data_path <- file.path(path.package("l1spectralclustering"), "data")
+        results_path <- file.path(path.package("l1spectralclustering"), "results")
+        file_suffix <- sprintf("n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", n, d, p_inside, p_outside)
+        data_file    <- file.path(data_path, paste0("data_", file_suffix))
+        results_file <- file.path(results_path, paste0("results_", current_method,"_",file_suffix))
+        
+        # Load the simulated data
+        if (file.exists(data_file)) {
+          load(data_file)
+          data_example <- graphs[[1]]
+        } else {
+          stop("Simulated data file not found at: ", data_file)
+        }
+        
+        # Run the code on the length(graphs) graphs
+        num_cores <- parallel::detectCores() - 2 
+        cl <- makeCluster(num_cores)
+        registerDoParallel(cl)
+        
+        results <- foreach(l = 1:length(graphs), 
+                           # Export ALL your custom functions
+                           .export = c("RunSimulations", "Spectral", "regSpectral", "ComputePerformance"),
+                           # Load ALL necessary libraries on the workers
+                           .packages = c("kernlab", "greed", "igraph", "aricode", "purrr")
+        ) %dopar% {
+          
+          graph_obj <- graphs[[l]]
+          res <- RunSimulations(graph_obj, method = current_method)
+          
+          return(res)
+        }
+        names(results) <- paste0("Graphs",1:length(graphs))
+        
+        stopCluster(cl)
+        
+        # Extract each metric 
+        NMI  <- sapply(results, function(x) x$NMI)
+        ARI  <- sapply(results, function(x) x$ARI)
+        AMI  <- sapply(results, function(x) x$AMI)
+        Time <- sapply(results, function(x) x$Time)
+        
+        results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
+        
+        # Save the results
+        save(results, results, file = results_file)
+        
+        cat("Saved results to:", results_file, "\n")       
+      }
+    }
+  }
+}
 ```
