@@ -31,7 +31,7 @@
 #'
 #' @export
 
-RunSimulations <- function(graph_obj, method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral","ST_l1spectral", "ST_Spectral", "Hybrid", "MCL")) {
+RunSimulations <- function(graph_obj, method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral","ST_l1Spectral", "ST_Spectral", "Hybrid", "MCL")) {
   # Start timer
   t1 <- Sys.time()
   
@@ -90,7 +90,9 @@ RunSimulations <- function(graph_obj, method = c("l1Spectral", "Spectral", "regS
 #'
 l1Spectral <- function(A,k = NULL){
   run_l1Spectral <- function(mat, centers) {
-    results_l1Spectral <- l1spectral::l1_spectralclustering(A=mat,pen="thresholdedLS",k=centers, k_max = 50)
+    Structure <- FindStructure(A = mat)
+    k_hat <- FindNbrClusters(A = mat, structure  = Structure, k = centers, k_max = 20)
+    results_l1Spectral <- l1_spectralclustering(A=mat,pen="thresholdedLS",k=k_hat$nbr_clusters_total ,k_max=20)
     if (!is.null(ncol(results_l1Spectral$comm))){
       clusters <- results_l1Spectral$comm%*%c(1:ncol(results_l1Spectral$comm))
     } else {
@@ -177,13 +179,21 @@ robustSpectral <- function(A, k) {
   return(clusters)
 }
 
-# ST spectral clustering
+#' Self-tuned spectral clustering
+#'
+#' The self-tuned spectral clustering (Python code). 
+#'
+#' @param A An adjacency matrix.
+#' @return A numeric vector of cluster assignments.
+#' 
+#' @importFrom reticulate source_python
+#' @export
 ST_Spectral <- function(A){
-  python_script <- here("python", "stsc.py")
+  python_script <- here::here("python", "stsc.py")
   
-  source_python(python_script)
+  reticulate::source_python(python_script)
   
-  sol <- self_tuning_spectral_clustering(A)
+  sol <- self_tuning_spectral_clustering_np(A)
 }
 
 #' Hybrid clustering algorithm (ICL-based)

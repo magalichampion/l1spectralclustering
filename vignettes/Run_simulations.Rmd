@@ -11,10 +11,6 @@ vignette: >
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ```{r setup, message=FALSE, warning=FALSE}
 library(l1spectralclustering)
 ```
@@ -109,44 +105,31 @@ for (n in (n_range)){
         # Load the simulated data
         if (file.exists(data_file)) {
           load(data_file)
-          data_example <- graphs[[1]]
+        
+          # Run the code on the length(graphs) graphs
+          results <- list()
+          for (l in (1:length(graphs))){
+            graph_obj <- graphs[[l]]
+            res <- RunSimulations(graph_obj, method = current_method)
+            results <- c(results,list(res))
+          }
+          names(results) <- paste0("Graphs",1:length(graphs))
+        
+          # Extract each metric 
+          NMI  <- sapply(results, function(x) x$NMI)
+          ARI  <- sapply(results, function(x) x$ARI)
+          AMI  <- sapply(results, function(x) x$AMI)
+          Time <- sapply(results, function(x) x$Time)
+        
+          results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
+        
+          # Save the results
+          save(results, results, file = results_file)
+        
+          cat("Saved results to:", results_file, "\n")
         } else {
-          stop("Simulated data file not found at: ", data_file)
+          message("Simulated data file not found at: ", data_file)
         }
-        
-        # Run the code on the length(graphs) graphs
-        num_cores <- parallel::detectCores() - 2 
-        cl <- makeCluster(num_cores)
-        registerDoParallel(cl)
-        
-        results <- foreach(l = 1:length(graphs), 
-                           # Export ALL your custom functions
-                           .export = c("RunSimulations", "Spectral", "regSpectral", "ComputePerformance"),
-                           # Load ALL necessary libraries on the workers
-                           .packages = c("kernlab", "greed", "igraph", "aricode", "purrr")
-        ) %dopar% {
-          
-          graph_obj <- graphs[[l]]
-          res <- RunSimulations(graph_obj, method = current_method)
-          
-          return(res)
-        }
-        names(results) <- paste0("Graphs",1:length(graphs))
-        
-        stopCluster(cl)
-        
-        # Extract each metric 
-        NMI  <- sapply(results, function(x) x$NMI)
-        ARI  <- sapply(results, function(x) x$ARI)
-        AMI  <- sapply(results, function(x) x$AMI)
-        Time <- sapply(results, function(x) x$Time)
-        
-        results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
-        
-        # Save the results
-        save(results, results, file = results_file)
-        
-        cat("Saved results to:", results_file, "\n")       
       }
     }
   }
@@ -163,7 +146,7 @@ library(doParallel)
 settings <- list(c(n=100, d=0.1),c(n=500, d=0.02))
 p_inside_range <- c(0.01,0.1,0.25,0.5)
 p_outside_range <- c(0.01,0.1,0.25,0.5)
-methods <- c("l1Spectral", "Spectral", "regSpectral","robustSpectral","ST_l1spectral", "ST_Spectral", "Hybrid", "MCL")
+methods <- c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "ST_Spectral", "Hybrid", "MCL")
 
 for (s in (settings)){
   for (current_method in (methods)){
@@ -171,6 +154,7 @@ for (s in (settings)){
       for (p_outside in p_outside_range){
         n <- s["n"]
         d <- s["d"]
+        
         # Construct the filenames and paths
         data_path <- file.path(path.package("l1spectralclustering"), "data")
         results_path <- file.path(path.package("l1spectralclustering"), "results")
@@ -181,44 +165,41 @@ for (s in (settings)){
         # Load the simulated data
         if (file.exists(data_file)) {
           load(data_file)
-          data_example <- graphs[[1]]
-        } else {
-          stop("Simulated data file not found at: ", data_file)
-        }
         
-        # Run the code on the length(graphs) graphs
-        num_cores <- parallel::detectCores() - 2 
-        cl <- makeCluster(num_cores)
-        registerDoParallel(cl)
+          # Run the code on the length(graphs) graphs
+          num_cores <- parallel::detectCores() - 2 
+          cl <- makeCluster(num_cores)
+          registerDoParallel(cl)
         
-        results <- foreach(l = 1:length(graphs), 
+          results <- foreach(l = 1:length(graphs), 
                            # Export ALL your custom functions
                            .export = c("RunSimulations", "Spectral", "regSpectral", "ComputePerformance"),
                            # Load ALL necessary libraries on the workers
                            .packages = c("kernlab", "greed", "igraph", "aricode", "purrr")
-        ) %dopar% {
-          
-          graph_obj <- graphs[[l]]
-          res <- RunSimulations(graph_obj, method = current_method)
-          
-          return(res)
+          ) %dopar% {
+            graph_obj <- graphs[[l]]
+            res <- RunSimulations(graph_obj, method = current_method)
+            return(res)
+          }
+          names(results) <- paste0("Graphs",1:length(graphs))
+        
+          stopCluster(cl)
+        
+          # Extract each metric 
+          NMI  <- sapply(results, function(x) x$NMI)
+          ARI  <- sapply(results, function(x) x$ARI)
+          AMI  <- sapply(results, function(x) x$AMI)
+          Time <- sapply(results, function(x) x$Time)
+        
+          results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
+        
+          # Save the results
+          save(results, results, file = results_file)
+        
+          cat("Saved results to:", results_file, "\n")   
+        } else {
+          message("Simulated data file not found at: ", data_file)
         }
-        names(results) <- paste0("Graphs",1:length(graphs))
-        
-        stopCluster(cl)
-        
-        # Extract each metric 
-        NMI  <- sapply(results, function(x) x$NMI)
-        ARI  <- sapply(results, function(x) x$ARI)
-        AMI  <- sapply(results, function(x) x$AMI)
-        Time <- sapply(results, function(x) x$Time)
-        
-        results <- c(results, list(NMI = NMI, AMI = AMI, ARI = ARI, Time = Time))
-        
-        # Save the results
-        save(results, results, file = results_file)
-        
-        cat("Saved results to:", results_file, "\n")       
       }
     }
   }

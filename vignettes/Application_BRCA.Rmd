@@ -1,0 +1,126 @@
+---
+title: "Application to BRCA data"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Application to BRCA data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(l1spectralclustering)
+```
+
+This vignette details the application of the $\ell_1$-spectral clustering to the BRCA (Breast Cancer) cohort from The Cancer Genome Atlas project (TCGA).
+
+# Data loading and preprocessing
+
+```{r}
+data_path <- file.path(path.package("l1spectralclustering"), "data")
+load("ProcessedData_BRCA.Rdata") # this file contains the expression data
+load("RealSubtypes_BRCA.Rdata") # this file contains the real subtypes from PAM50
+
+Samples <- intersect(names(Subtypes),rownames(MA_TCGA))
+Subtypes <- Subtypes[Samples]
+MA_TCGA <- MA_TCGA[Samples,]
+
+# Preprocessing data
+filter <- 75
+library(matrixStats)
+I <- order(colVars(as.matrix(MA_TCGA)),decreasing = TRUE)[1:(75*ncol(MA_TCGA)/100)]
+Data <- MA_TCGA[,I]
+```
+
+# Construction of the co-expression network
+
+```{r}
+Corr <- cor(t(Data))
+Corr[abs(Corr) < 0.70] <- 0
+Corr[abs(Corr) >= 0.70] <- 1
+diag(Corr) <- 0
+```
+
+# Application of the l1-spectral clustering
+
+```{r}
+clusters <- l1_spectralclustering(A=Corr, pen="thresholdedLS", stab=FALSE) # to verify
+# and add the code to plot the figure
+
+results_path <- file.path(path.package("l1spectralclustering"), "results")
+results_file <- file.path(results_path, "RealBRCA_estimatedClusters.Rdata")
+save(clusters,file = results_file)
+```
+
+```{r}
+library(limma)
+library(fgsea) 
+
+n_clusters <- length(table(clusters))
+
+for (c in (1:n_clusters)){
+  # 1. Prepare the designatrix
+  group <- factor(ifelse(clusters == c, "Cluster_c", "Base"))
+  design <- model.matrix(~group)
+
+  # 2. Run differential expression
+  fit <- lmFit(t(MA_TCGA[names(clusters),]), design)
+  fit <- eBayes(fit)
+
+  # 3. Extract results and create the ranking metric
+  stats <- topTable(fit, coef = 2, number = Inf)
+
+  # 4. Create the ranking metric 
+  # This calculates sign(logFC) * -log10(p-value)
+  stats$rank_metric <- sign(stats$logFC) * -log10(stats$P.Value)
+
+  # 5. Sort/Arrange the data 
+  stats_sorted <- stats[order(-stats$rank_metric), ]
+
+  # 6. Create the named vector for GSEA
+  ranked_list <- stats_sorted$rank_metric
+  names(ranked_list) <- rownames(stats_sorted)
+
+  # 5. Run GSEA (using Hallmark pathways as an example)
+  #pathways <- gmtPathways(here("data", "h.all.v2026.1.Hs.symbols.gmt"))
+
+  gsea_results <- fgsea(pathways = pathways, 
+                      stats = ranked_list,
+                      minSize = 15,
+                      maxSize = 500)
+
+  significant_pathways <- gsea_results[gsea_results$padj < 0.05, ]
+  significant_pathways <- significant_pathways[order(significant_pathways$NES, decreasing = TRUE), ]
+
+  print(significant_pathways[, c("pathway", "NES", "padj", "size")])
+
+  # 6. Plot the results
+  plot_df <- as.data.frame(significant_pathways)
+
+  plot_df$pathway <- gsub("HALLMARK_", "", plot_df$pathway)
+  plot_df$pathway <- gsub("_", " ", plot_df$pathway)
+
+  plot_df$Direction <- ifelse(plot_df$NES > 0, "Upregulated", "Downregulated")
+
+  g <- ggplot(plot_df, aes(x = reorder(pathway, NES), y = NES, fill = Direction)) +
+    geom_bar(stat = "identity", width = 0.8) +
+    coord_flip() + 
+    scale_fill_manual(values = c("Upregulated" = "#E41A1C", 
+                               "Downregulated" = "#377EB8")) +
+  theme_minimal() +
+  labs(
+    title = paste0("Hallmark pathway enrichment for cluster ",c),
+    subtitle = "Significance threshold: padj < 0.05",
+    x = "Pathway",
+    y = "Normalized Enrichment Score (NES)"
+  ) +
+  theme(
+    axis.text.y = element_text(size = 10, face = "bold"),
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+  g
+}
+
+```
+
