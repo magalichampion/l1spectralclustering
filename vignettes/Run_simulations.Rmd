@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(l1spectralclustering)
 ```
 
-The following code demonstrates the workflow for executing a single simulation experiment across multiple graph instances. To run it, the specific simulation parameters (such as the number of nodes $n$, the density of the graph $d$, and perturbation levels $p_{in}$ and $p_{out}$) and select the desired clustering algorithm (e.g., `l1Spectral`) at the beginning of the script.
+The following code demonstrates the workflow for executing a single simulation experiment across multiple graph instances. To run it, the user must define the specific simulation parameters (such as the number of nodes $n$, the density of the graph $d$, and perturbation levels $p_{in}$ and $p_{out}$) and select the desired clustering algorithm (e.g., `l1Spectral`) at the beginning of the script.
 
 ```{r}
 library(foreach)
@@ -78,12 +78,9 @@ save(results, results, file = results_file)
 cat("Saved results to:", results_file, "\n")
 ```
 
-This code builds upon the first one by looping over defined ranges of $n$, $d$, $p_{in}$, and $p_{out}$ using the self-tuned version of the $\ell_1$-spectral clustering algorithm. This specific configuration was used to generate Table 1.
+This code loops over defined ranges of $n$, $d$, $p_{in}$, and $p_{out}$ using the self-tuned version of the $\ell_1$-spectral clustering algorithm. This specific configuration was used to generate Table 1.
 
 ```{r}
-library(foreach)
-library(doParallel)
-
 # Define simulation parameters
 n_range <- c(50,100,500,1000)
 d_range <- c(0.01,0.02,0.1,0.2)

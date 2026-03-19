@@ -92,7 +92,7 @@ l1Spectral <- function(A,k = NULL){
   run_l1Spectral <- function(mat, centers) {
     Structure <- FindStructure(A = mat)
     k_hat <- FindNbrClusters(A = mat, structure  = Structure, k = centers, k_max = 20)
-    results_l1Spectral <- l1_spectralclustering(A=mat,pen="thresholdedLS",k=k_hat$nbr_clusters_total ,k_max=20)
+    results_l1Spectral <- l1spectral::l1_spectralclustering(A=mat,pen="thresholdedLS",k=k_hat$nbr_clusters_total ,k_max=20)
     if (!is.null(ncol(results_l1Spectral$comm))){
       clusters <- results_l1Spectral$comm%*%c(1:ncol(results_l1Spectral$comm))
     } else {
@@ -175,7 +175,8 @@ robustSpectral <- function(A, k) {
   
   # Call the Python function
   clusters <- run_rsc(as.matrix(A), k)
-  
+  clusters <- clusters + 1 # to rename the clusters starting from 1
+  clusters <- as.vector(clusters)
   return(clusters)
 }
 
