@@ -21,6 +21,7 @@
 #' \item{A}{The ideal (ground-truth) adjacency matrix.}
 #' \item{A_hat}{The perturbed/noisy adjacency matrix used for clustering benchmarks.}
 #' \item{ClustersLength}{The size of each generated cluster.}
+#' \item{clusters}{A vector of cluster assignments.}
 #'
 #' @importFrom Matrix bdiag
 #' @importFrom igraph graph_from_adjacency_matrix plot.igraph
@@ -106,5 +107,7 @@ CreateDataSet <- function(k, n, p, print.plot=TRUE, ClustersLength = NULL, rngSE
   plot(graph,main="Real graph")
   plot(graph_hat,main="Perturbed graph")
   
-  data <- list(A=A, A_hat = A_perturbed, ClustersLength=ClustersLength)
+  comp_membership <- components(graph)$membership
+  
+  data <- list(A=A, A_hat = A_perturbed, ClustersLength=ClustersLength, clusters=comp_membership)
 }

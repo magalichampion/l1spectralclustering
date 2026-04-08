@@ -31,7 +31,8 @@ current_method <- "l1Spectral"
 # Construct the filenames and paths
 data_path <- file.path(path.package("l1spectralclustering"), "data")
 results_path <- file.path(path.package("l1spectralclustering"), "results")
-file_suffix <- sprintf("n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", n, d, p_inside, p_outside)
+file_suffix <- sprintf("n=%d_density=%g_p_inside=%.2f_p_outside=%.2f.Rdata", 
+                       n, d, p_inside, p_outside)
 data_file    <- file.path(data_path, paste0("data_", file_suffix))
 results_file <- file.path(results_path, paste0("results_", current_method,"_",file_suffix))
 
@@ -83,7 +84,7 @@ This code loops over defined ranges of $n$, $d$, $p_{in}$, and $p_{out}$ using t
 ```{r}
 # Define simulation parameters
 n_range <- c(50,100,500,1000)
-d_range <- c(0.01,0.02,0.1,0.2)
+d_range <- c(0.005,0.01,0.02,0.05,0.1,0.2)
 p_inside_range <- c(0.01,0.1,0.25,0.5)
 p_outside_range <- c(0.01,0.1,0.25,0.5)
 current_method <- "ST_l1Spectral"
@@ -95,7 +96,8 @@ for (n in (n_range)){
         # Construct the filenames and paths
         data_path <- file.path(path.package("l1spectralclustering"), "data")
         results_path <- file.path(path.package("l1spectralclustering"), "results")
-        file_suffix <- sprintf("n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", n, d, p_inside, p_outside)
+        file_suffix <- sprintf("n=%d_density=%g_p_inside=%.2f_p_outside=%.2f.Rdata", 
+                       n, d, p_inside, p_outside)
         data_file    <- file.path(data_path, paste0("data_", file_suffix))
         results_file <- file.path(results_path, paste0("results_", current_method,"_",file_suffix))
         
@@ -109,6 +111,7 @@ for (n in (n_range)){
             graph_obj <- graphs[[l]]
             res <- RunSimulations(graph_obj, method = current_method)
             results <- c(results,list(res))
+            print(paste0("Graph ",l," done!"))
           }
           names(results) <- paste0("Graphs",1:length(graphs))
         
@@ -143,7 +146,7 @@ library(doParallel)
 settings <- list(c(n=100, d=0.1),c(n=500, d=0.02))
 p_inside_range <- c(0.01,0.1,0.25,0.5)
 p_outside_range <- c(0.01,0.1,0.25,0.5)
-methods <- c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "ST_Spectral", "Hybrid", "MCL")
+methods <- c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "VGAE", "Spectrum", "Hybrid", "MCL")
 
 for (s in (settings)){
   for (current_method in (methods)){
@@ -155,7 +158,8 @@ for (s in (settings)){
         # Construct the filenames and paths
         data_path <- file.path(path.package("l1spectralclustering"), "data")
         results_path <- file.path(path.package("l1spectralclustering"), "results")
-        file_suffix <- sprintf("n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", n, d, p_inside, p_outside)
+        file_suffix <- sprintf("n=%d_density=%g_p_inside=%.2f_p_outside=%.2f.Rdata", 
+                       n, d, p_inside, p_outside)
         data_file    <- file.path(data_path, paste0("data_", file_suffix))
         results_file <- file.path(results_path, paste0("results_", current_method,"_",file_suffix))
         

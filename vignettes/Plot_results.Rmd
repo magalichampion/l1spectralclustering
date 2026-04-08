@@ -1,0 +1,42 @@
+---
+title: "Plot results"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Plot results}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(l1spectralclustering)
+```
+
+This vignette describes the workflow for generating the performance plots found in Figure 2 of the manuscript. The objective is to evaluate the robustness of the $\ell_1$-spectral clustering framework against state-of-the-art methods, including: spectral clustering algorithm (standard, regularized and robust versions), VGAE (Variational Graph Auto-Encoders), MCL (Markov Cluster Algorithm), Spectrum and Hybrid approaches.
+Before visualization, ensure your simulation outputs are stored in a structured directory (`/data` for ground truth and `/results` for outputs). The functions expect a naming convention that includes $n$, $d$, and the perturbation probabilities.
+
+The `merge_simulation_results` function crawls the results directory to aggregate the results into a data frame. In addition to standard metrics (mean/median AMI), it computes the missclassification counts (number of nodes incorrectly assigned to a cluster), the recall (the ratio of classified nodes to the total number of nodes) and 
+the AMI calculated only on the subset of nodes actually classified by the algorithm.
+
+```{r}
+# Define the grid of parameters used in the simulation
+p_inside_range = p_outside_range <- c(0.01, 0.1, 0.25, 0.5)
+n <- 500
+d <- 0.01
+path <- file.path(path.package("l1spectralclustering"))
+method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "VGAE", "ST_l1Spectral", "Spectrum", "Hybrid", "MCL")
+
+# Compile results into a structured data frame
+sim_data <- merge_simulation_results(
+  path = path,
+  n = n,
+  d = d,
+  p_inside_range = p_inside_range,
+  p_outside_range = p_outside_range,
+  method = method
+)
+
+```

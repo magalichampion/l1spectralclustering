@@ -1,53 +1,69 @@
-merge_simulation_results <- function(path, n = NULL, d = NULL, methods=NULL) {
-  all_files <- list.files(paste0(path,"results"), full.names = FALSE)
+#' Merge simulation results across parameter grids
+#'
+#' @param path Character. The base directory path containing "data/" and "results/" subdirectories.
+#' @param n Integer. The number of nodes in the graph.
+#' @param d Numeric. The density of the graph.
+#' @param p_inside_range Numeric vector. Probabilities of internal edge perturbation.
+#' @param p_outside_range Numeric vector. Probabilities of external edge perturbation.
+#' @param method Character vector. Names of the clustering methods to aggregate.
+#'
+#' @return A list containing two data frames: 
+#' \item{Full}{Every iteration result with metrics per graph.}
+#' \item{Summary}{Mean/median metrics grouped by method and perturbation level.}
+#' 
+#' @export
+#' @import dplyr
+#' @import aricode
+#' @import stringr
+merge_simulation_results <- function(path, n = NULL, d = NULL, p_inside_range = c(0.01,0.1,0.25,0.5), p_outside_range = c(0.01,0.1,0.25,0.5), method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "VGAE", "ST_l1Spectral", "Spectrum", "Hybrid", "MCL")) {
+  all_files <- list.files(paste0(path,"/results"), full.names = FALSE)
   
-  Data_Full <- data.frame()
-  Data_Summary <- data.frame()
+  data_full_list <- list()
 
   for (p_inside in p_inside_range){
     for (p_outside in p_outside_range){
-      data_pattern <- paste0(path,"data/data_n=", n,"_density=",sprintf("%.2f", d), "_p_inside=", sprintf("%.2f", p_inside), "_p_outside=", sprintf("%.2f", p_outside),".Rdata")
+      data_pattern <- paste0(path,"/data/data_n=", n,"_density=",sprintf("%g", d), "_p_inside=", sprintf("%.2f", p_inside), "_p_outside=", sprintf("%.2f", p_outside),".Rdata")
+      if (!file.exists(data_pattern)) next
       load(data_pattern)
       
-      for (current_method in methods){
+      for (current_method in method){
         file_pattern <- paste0("results_", current_method, 
                                "_n=", n, 
-                               "_density=", sprintf("%.2f", d), 
+                               "_density=", sprintf("%g", d), 
                                "_p_inside=", sprintf("%.2f", p_inside), 
                                "_p_outside=", sprintf("%.2f", p_outside))
         
         target_file <- all_files[str_detect(all_files, file_pattern)]
         
         if (length(target_file) > 0) {
-          load(file.path(paste0(path, "results/",target_file[1])))
+          load(file.path(paste0(path, "/results/",target_file[1])))
           
-          AMI <- results$AMI
+          num_graphs <- length(results) - 4
           
-          miss_counts <- c()
-          AMI_corrected <- c()
-          coverage <- c()
-          for (g in (1:(length(results)-4))) {
+          for (g in (1:num_graphs)) {
             res <- results[[g]]
             
             clus_est <- res$clusters
+            true_clus <- graphs[[g]]$clusters
             
-            if (!any(is.na(clus_est))){
-              true_clus <- igraph::components(graph_from_adjacency_matrix(graphs[[g]]$A, mode="undirected"))$membership
-              
-              idx <- which(clus_est != 0) # Find nodes your method actually clustered
+            if (any(is.na(clus_est))) {
+              ami_corr <- NA
+              cov_val <- NA
+              current_miss <- NA
+            } else {
+              idx <- which(clus_est != 0) 
               if(length(idx) > 0) {
-                AMI_corrected <- c(AMI_corrected,aricode::AMI(clus_est[idx], true_clus[idx]))
-                coverage <- c(coverage,length(idx) / length(true_clus))
+                ami_corr <- aricode::AMI(clus_est[idx], true_clus[idx])
+                cov_val <- length(idx) / length(true_clus)
               } else {
-                AMI_corrected <- c(AMI_corrected,0)
-                coverage <- c(coverage,0)
+                ami_corr <- 0
+                cov_val <- 0
               }
               
               t <- table(as.vector(clus_est), true_clus)
               if (rownames(t)[1]=="0"){
                 t <- t[-1,]
               }
-              # include the number of missclassified nodes here!!!
               errors <- 0
             
               if (nrow(t) > 0) {
@@ -59,65 +75,61 @@ merge_simulation_results <- function(path, n = NULL, d = NULL, methods=NULL) {
               
                 current_miss <- errors + (sum(t) - correct_nodes)
               }
-            } else {
-              current_miss <- NA
-              AMI_corrected <- c(AMI_corrected,NA)
-              coverage <- c(coverage,NA)
             }
-            miss_counts <- c(miss_counts, current_miss)
+          
+            data_full_list[[length(data_full_list) + 1]] <- data.frame(
+              AMI = results$AMI[g],
+              AMI_corrected = ami_corr,
+              coverage = cov_val,
+              Miss = current_miss,
+              Miss_perc = current_miss / n,
+              Method = current_method,
+              p_inside = p_inside,
+              p_outside = p_outside,
+              n = n,
+              density = d
+            )
           }
-          
-          Data_Full <- rbind(Data_Full, data.frame(
-            AMI    = AMI,
-            AMI_corrected = AMI_corrected,
-            coverage = coverage,
-            Miss = miss_counts,
-            Miss_perc = miss_counts / n,
-            Method = current_method,
-            p_inside   = p_inside,
-            p_outside  = p_outside,
-            n      = n,
-            density = d
-          ))
-          
-          Data_Summary <- rbind(Data_Summary, data.frame(
-            Method     = current_method,
-            Median_AMI = median(AMI, na.rm = TRUE),
-            Mean_AMI   = mean(AMI, na.rm = TRUE),
-            Mean_Miss = mean(miss_counts, na.rm = TRUE),
-            Mean_Miss_perc = mean(miss_counts, na.rm = TRUE) / n,
-            p_inside   = p_inside,
-            p_outside  = p_outside
-          ))
         }
       }
     }
   }
-  Data_Full <- Data_Full %>%
-    mutate(Method = factor(Method, levels = c(
-      "l1Spectral", "Spectral", "regSpectral", "robustSpectral", "GNN",
-      "ST_l1Spectral", "ST_Spectral","Hybrid", "MCL"
-    ))) %>%
-    mutate(Category = case_when(
-      Method %in% c("l1Spectral", "Spectral", "regSpectral", "robustSpectral","GNN") ~ "Non self-tuned",
-      Method %in% c("ST_l1Spectral", "ST_Spectral","Hybrid", "MCL") ~ "Self-tuned",
-    ))
-  Data_Summary <- Data_Summary %>%
-    mutate(Method = factor(Method, levels = c(
-      "l1Spectral", "Spectral", "regSpectral", "robustSpectral", "GNN",
-      "ST_l1Spectral", "ST_Spectral","Hybrid", "MCL"
-    ))) %>%
-    mutate(Category = case_when(
-      Method %in% c("l1Spectral", "Spectral", "regSpectral", "robustSpectral","GNN") ~ "Non self-tuned",
-      Method %in% c("ST_l1Spectral", "ST_Spectral","Hybrid", "MCL") ~ "Self-tuned",
-    ))
+          
+  Data_Full <- dplyr::bind_rows(data_full_list) %>%
+      mutate(Method = factor(Method, levels = method)) %>%
+      mutate(Category = case_when(
+        Method %in% c("l1Spectral", "Spectral", "regSpectral", "robustSpectral", "VGAE") ~ "Non self-tuned",
+          TRUE ~ "Self-tuned"
+      ))
+          
+  Data_Summary <- Data_Full %>%
+    group_by(Method, Category, p_inside, p_outside) %>%
+      summarise(Median_AMI = median(AMI, na.rm = TRUE),
+                Mean_AMI   = mean(AMI, na.rm = TRUE),
+                Mean_Miss  = mean(Miss, na.rm = TRUE),
+                Mean_Miss_perc = mean(Miss_perc, na.rm = TRUE),
+                Mean_Coverage = mean(coverage, na.rm = TRUE),
+                .groups = "drop"
+                )
   return(list(Full=Data_Full,Summary=Data_Summary))
 }
 
-plot_perf <- function(df, n, k) {
+#' Plot clustering performance comparison
+#'
+#' @param df List. The output object from the \code{merge_simulation_results} function, 
+#' containing \code{Full} and \code{Summary} data frames.
+#' @param n Integer. The number of nodes.
+#' @param d Numeric. The graph density.
+#'
+#' @return A \code{ggplot} object representing the performance grid across 
+#' internal (\code{p_inside}) and external (\code{p_outside}) perturbation levels.
+#' 
+#' @import ggplot2
+#' @export
+plot_perf <- function(df, n, d) {
   # df is the output of merge_simulation_results function 
   p <- ggplot(df$Full,aes(x=Method, y=AMI,fill=Method)) +
-    geom_boxplot(outlier.shape = NA)+scale_fill_manual(values=c("peachpuff","lightsalmon","lightsalmon3","tomato4","slategray2","steelblue1","steelblue3","steelblue4"))+
+    geom_boxplot(outlier.shape = NA)+scale_fill_manual(values=c("peachpuff","sandybrown","lightsalmon","lightsalmon3","tomato4","slategray2","steelblue1","steelblue3","steelblue4"))+
     facet_grid(p_outside~p_inside)+ scale_y_continuous(limits=c(0,1)) +
     theme_bw()+scale_x_discrete(guide = guide_axis(angle = 45))
   p <- p +geom_point(data = subset(df$Summary, Category == "Non self-tuned"),
@@ -148,3 +160,9 @@ ggplot(subset(df$Full, Category == "Non self-tuned"), aes(x = coverage, y = AMI_
     "Spectral" = "steelblue", "regSpectral" = "blue", 
     "GNN" = "darkgreen", "MCL" = "orange"
   ))
+
+n<- 1000
+d<- 0.005
+df <- merge_simulation_results(path= "/Users/mchampion/Documents/GitHub/l1spectralclustering/",n,d)
+g <- plot_perf(df, n,d)
+g

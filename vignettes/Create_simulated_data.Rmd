@@ -18,13 +18,13 @@ library(l1spectralclustering)
 # Create simulated data for a set of parameters
 ```{r}
 # set the parameters to simulate data
-k <- 2 # number of clusters
+d <- 0.1 # density (n*d = k, number of clusters)
 n <- 100 # number of nodes
 p <- list(p_inside = 0.1, p_outside = 0.05) # perturbations
 rngSEED <- 12345L
 
 # run the code to simulate the data
-data <- CreateDataSet(k, n, p, rngSEED)
+data <- CreateDataSet(k = d*n, n, p, rngSEED)
 ```
 
 # Create simulated data for all possible combinations of parameters
