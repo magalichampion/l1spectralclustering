@@ -1,6 +1,6 @@
 # $\ell_1$-spectral clustering simulations
 
-This repository contains the experimental workflow, simulation scripts, and data preprocessing pipelines for the manuscript "$\ell_1$-spectral clustering algorithm: a spectral clustering method using $\ell_1$-regularization". 
+This repository contains the experimental workflow, simulation scripts, and data preprocessing pipelines for the manuscript " $\ell_1$-spectral clustering algorithm: a spectral clustering method using $\ell_1$-regularization". 
 Its goal is to provide an end-to-end path to reproduce the figures and tables presented in the study.
 
 ---
