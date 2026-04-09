@@ -4,7 +4,7 @@ Version: 1.0.0
 Authors@R: c(
     person("Magali", "Champion", , "magali.champion@math.uzh.ch", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-1639-641X"))
-    person("Camille", "Champion", , "camille.champion@parisdescartes.fr", role = "aut"),
+    person("Camille", "Champion", , "camille.champion@u-paris.fr", role = "aut"),
   )
 Description: Provides a comprehensive framework for reproducing the results, 
     simulations, and real-world applications presented in the 
