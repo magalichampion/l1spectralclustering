@@ -15,27 +15,34 @@ knitr::opts_chunk$set(echo = TRUE)
 library(l1spectralclustering)
 ```
 
-# Create simulated data for a set of parameters
+This vignette details the generation of synthetic networks used for benchmarking. The process involves creating a base community structure and then applying perturbations controlled by internal connectivity ($p_{in}$) and external noise ($p_{out}$).
+
+# Simple simulation example
+
+This code can be used to generate a single dataset. In this example, we set the density $d$ and the number of nodes $n$ to create a graph with a specific number of clusters ($k=n\times d$).
+
 ```{r}
-# set the parameters to simulate data
+# Set the parameters to simulate data
 d <- 0.1 # density (n*d = k, number of clusters)
 n <- 100 # number of nodes
 p <- list(p_inside = 0.1, p_outside = 0.05) # perturbations
 rngSEED <- 12345L
 
-# run the code to simulate the data
+# Run the code to simulate the data
 data <- CreateDataSet(k = d*n, n, p, rngSEED)
 ```
 
-# Create simulated data for all possible combinations of parameters
-```{r}
-# set the parameters
-path_data <- here::here("data")
-if (!dir.create(path_data, showWarnings = FALSE)) {
-  message("Data folder already exists or was created.")
-}
 
-density_range <- c(0.01,0.02,0.1,0.2) # "density" of the graph (k/n)
+# Full combinatorial grid simulation
+
+To robustly evaluate performance, we simulate data across a wide range of parameter combinations. For every set of parameters, we generate $100$ independent perturbed graphs. 
+
+```{r}
+# data directory
+path_data <- here::here("data")
+
+# define the parameters
+density_range <- c(0.005,0.01,0.02,0.05,0.1,0.2) # density of the graph (k/n)
 n_range <- c(50,100,500,1000) # number of nodes
 p_inside_range <- c(0.01,0.1,0.25,0.5)
 p_outside_range <- c(0.01,0.1,0.25,0.5)
@@ -47,7 +54,10 @@ for(n in n_range){
   for(d in density_range){
     for(p_inside in p_inside_range){
       for (p_outside in p_outside_range){
-        
+        if (d*n <= 2 || d*n > 25) {
+          message(sprintf("Skipping: n=%d, d=%.2f (k=%.1f out of bounds)", n, d, d*n))
+          next 
+        }
         graphs <- list() # to store the simulated graphs
         
         ClustersLength <- rep(floor(1/d),d*n)
@@ -68,14 +78,14 @@ for(n in n_range){
           }
           names(graphs) <- paste0("Graph",1:n_graphs)
           
-          # Define the specific filename for this (n, density, noise) combination
+          # define the specific filename for this (n, density, noise) combination
           file_name <- sprintf("data_n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", 
                      n, d, p_inside, p_outside)
 
-          # Construct the full destination path
+          # construct the full destination path
           full_path <- file.path(path_data, file_name)
 
-          # Save the 100 perturbed graphs
+          # save the 100 perturbed graphs
           save(graphs, file = full_path)
         }
       }
