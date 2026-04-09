@@ -13,10 +13,10 @@ Its goal is to provide an end-to-end path to reproduce the figures and tables pr
     * `Run_simulations.R`: Benchmarks the $\ell_1$-spectral clustering against state-of-the-art methods.
     * `Compute_performance`: Calculates statistical metrics including Adjusted Mutual Information (AMI).
     * `Plot_results.R`: Produces comparative visualizations to evaluate methods performance.
-* **`python/`**: Python implementations.
+* **`python/`**: Python implementations of benchmarking methods.
 * **`data/`**: Processed datasets.
 * **`results/`**: Results to generate figures and tables.
-* **`DESCRIPTION`**: All R dependencies and versions.
+* **`DESCRIPTION`**: Standard metadata listing all dependencies and version requirements.
 * **`vignettes`**: Comprehensive step-by-step tutorials.
 
 ---
@@ -25,9 +25,11 @@ Its goal is to provide an end-to-end path to reproduce the figures and tables pr
 
 ### 1. Requirements
 Ensure you have [RStudio](https://rstudio.com/) installed. This project relies on the following key packages:
-- `l1spectral`
-- `WGCNA`
-- `igraph`
+- `l1spectral`: Core algorithm implementation.
+- `reticulate`: Python-R interface.
+- `igraph`: Network construction and graph handling.
+
+*Note: A full list of all dependencies (including `ggplot2`, `Matrix`, etc.) can be found in the `DESCRIPTION` file.*
 
 ### 2. Setup
 Clone the repository and open the `.Rproj` file in RStudio. Then, install dependencies using `devtools`:
@@ -39,4 +41,8 @@ devtools::install_deps()
 
 ### 3. Execution
 
-Run the scripts in the `scripts/` folder in numerical order. Each script is self-contained but assumes the previous data-cleaning steps have been completed.
+The analysis is designed to be reproducible via the provided tutorials. Please refer to the `vignettes/` folder for step-by-step guidance on:
+
+- Generating synthetic data and reproducing the benchmarking simulations.
+
+- Applying the $\ell_1$-spectral clustering algorithm to BRCA patient data.
