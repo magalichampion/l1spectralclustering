@@ -2,7 +2,6 @@ import numpy as np
 from functools import reduce
 from scipy.optimize import minimize
 
-
 def generate_Givens_rotation(i, j, theta, size):
     g = np.eye(size)
     c = np.cos(theta)

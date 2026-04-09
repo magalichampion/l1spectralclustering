@@ -1,9 +1,6 @@
 import numpy as np
 from stsc_ulti import affinity_to_lap_to_eig, reformat_result, get_min_max
 from stsc_np import get_rotation_matrix as get_rotation_matrix_np
-from stsc_autograd import get_rotation_matrix as get_rotation_matrix_autograd
-from stsc_manopt import get_rotation_matrix as get_rotation_matrix_manopt
-
 
 def self_tuning_spectral_clustering(affinity, get_rotation_matrix, min_n_cluster=None, max_n_cluster=None):
     w, v = affinity_to_lap_to_eig(affinity)
@@ -20,11 +17,3 @@ def self_tuning_spectral_clustering(affinity, get_rotation_matrix, min_n_cluster
 
 def self_tuning_spectral_clustering_np(affinity, min_n_cluster=None, max_n_cluster=None):
     return self_tuning_spectral_clustering(affinity, get_rotation_matrix_np, min_n_cluster, max_n_cluster)
-
-
-def self_tuning_spectral_clustering_autograd(affinity, min_n_cluster=None, max_n_cluster=None):
-    return self_tuning_spectral_clustering(affinity, get_rotation_matrix_autograd, min_n_cluster, max_n_cluster)
-
-
-def self_tuning_spectral_clustering_manopt(affinity, min_n_cluster=None, max_n_cluster=None):
-    return self_tuning_spectral_clustering(affinity, get_rotation_matrix_manopt, min_n_cluster, max_n_cluster)
