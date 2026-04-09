@@ -9,12 +9,15 @@ Its goal is to provide an end-to-end path to reproduce the figures and tables pr
 
 * **`l1spectralclustering.Rproj`**: R Project file.
 * **`scripts/`**: R scripts for the full analysis.
-    * `01_preprocessing.R`: Implements 75% variance filtering and 0.7 correlation network construction.
-    * `02_simulations.R`: Benchmarking scripts (reproduces Table 1 and Eigengap analysis).
-    * `03_tcga_analysis.R`: Real-world application on TCGA-BRCA data.
-* **`data/`**: Contains processed datasets.
-* **`results/`**: Contains the results to generate figures and tables.
-* **`DESCRIPTION`**: Lists all R dependencies and versions.
+    * `Create_simulated_data`: Generates synthetic graphs with ground-truth community structures across varying number of nodes, densities and noise levels.
+    * `Run_simulations.R`: Benchmarks the $\ell_1$-spectral clustering against state-of-the-art methods.
+    * `Compute_performance`: Calculates statistical metrics including Adjusted Mutual Information (AMI).
+    * `Plot_results.R`: Produces comparative visualizations to evaluate methods performance.
+* **`python/`**: Python implementations.
+* **`data/`**: Processed datasets.
+* **`results/`**: Results to generate figures and tables.
+* **`DESCRIPTION`**: All R dependencies and versions.
+* **`vignettes`**: Comprehensive step-by-step tutorials.
 
 ---
 
