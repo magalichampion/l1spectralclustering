@@ -15,17 +15,17 @@ knitr::opts_chunk$set(echo = TRUE)
 library(l1spectralclustering)
 ```
 
-This vignette describes the workflow for generating the performance plots found in Figure 2 of the manuscript. The objective is to evaluate the robustness of the $\ell_1$-spectral clustering framework against state-of-the-art methods, including: spectral clustering algorithm (standard, regularized and robust versions), VGAE (Variational Graph Auto-Encoders), MCL (Markov Cluster Algorithm), Spectrum and Hybrid approaches.
-Before visualization, ensure your simulation outputs are stored in a structured directory (`/data` for ground truth and `/results` for outputs). The functions expect a naming convention that includes $n$, $d$, and the perturbation probabilities.
+This vignette describes the workflow for generating the performance plots found in Figures 2 and 3 of the manuscript. The objective is to evaluate the robustness of the $\ell_1$-spectral clustering framework against state-of-the-art methods, including: spectral clustering algorithm (standard, regularized and robust versions), VGAE (Variational Graph Auto-Encoders), MCL (Markov Cluster Algorithm), Spectrum and Hybrid approaches.
+Before visualization, ensure your simulation outputs are stored in a structured directory (`/data` for ground truth and `/results` for outputs). The functions expect a naming convention that includes $n$, $k$, and the perturbation probabilities.
 
-The `merge_simulation_results` function crawls the results directory to aggregate the results into a data frame. In addition to standard metrics (mean/median AMI), it computes the missclassification counts (number of nodes incorrectly assigned to a cluster), the recall (the ratio of classified nodes to the total number of nodes) and 
+The `merge_simulation_results` function crawls the results directory to aggregate the results into a data frame. In addition to standard metrics (mean/median AMI), it computes the number of nodes incorrectly assigned to a cluster, the recall (the ratio of classified nodes to the total number of nodes), the estimated number of clusters, and 
 the AMI calculated only on the subset of nodes actually classified by the algorithm.
 
 ```{r}
 # Define the grid of parameters used in the simulation
 p_inside_range = p_outside_range <- c(0.01, 0.1, 0.25, 0.5)
 n <- 500
-d <- 0.01
+k <- 10
 path <- file.path(path.package("l1spectralclustering"))
 method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "VGAE", "ST_l1Spectral", "Spectrum", "Hybrid", "MCL")
 
@@ -33,10 +33,48 @@ method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "VGAE", "ST
 sim_data <- merge_simulation_results(
   path = path,
   n = n,
-  d = d,
+  k = k,
   p_inside_range = p_inside_range,
   p_outside_range = p_outside_range,
   method = method
 )
+```
 
+The `plot_perf` function generates the faceted comparison grid in Figure 2. It displays the distribution of the AMI to provide a complete view of algorithmic stability under varying noise levels.
+
+```{r}
+# Generate the performance comparison plot
+# This produces the multi-panel grid seen in Figure 2
+g <- plot_perf(df = sim_data, n = n, k = k)
+print(g)
+
+ggsave(
+  filename = paste0("Simulation_Results_n=",n,"_k=",k,".pdf"), 
+  plot = g,
+  device = "pdf",
+  path = paste0(path,"/results"), # Saves into a 'figures' folder
+  width = 12,                   # Inches
+  height = 8, 
+  units = "in",
+  dpi = 300                     # High resolution
+)
+```
+
+The `plot_n_cluster` function generates the faceted comparison grid in Figure 3, which displays the distribution of the estimated number of clusters. This allows for a direct assessment of how consistently each method identifies the true cluster count as perturbation increases.
+
+```{r}
+# This produces the multi-panel grid seen in Figure 3
+g <- plot_n_cluster(df = sim_data, n = n, k = k)
+print(g)
+
+ggsave(
+  filename = paste0("Simulation_Results_n=",n,"_k=",k,"_n_cluster.pdf"), 
+  plot = g,
+  device = "pdf",
+  path = paste0(path,"/results"), # Saves into a 'figures' folder
+  width = 12,                   # Inches
+  height = 8, 
+  units = "in",
+  dpi = 300                     # High resolution
+)
 ```

@@ -2,7 +2,7 @@
 #'
 #' @param path Character. The base directory path containing "data/" and "results/" subdirectories.
 #' @param n Integer. The number of nodes in the graph.
-#' @param d Numeric. The density of the graph.
+#' @param k Numeric. Number of clusters.
 #' @param p_inside_range Numeric vector. Probabilities of internal edge perturbation.
 #' @param p_outside_range Numeric vector. Probabilities of external edge perturbation.
 #' @param method Character vector. Names of the clustering methods to aggregate.
@@ -15,21 +15,21 @@
 #' @import dplyr
 #' @import aricode
 #' @import stringr
-merge_simulation_results <- function(path, n = NULL, d = NULL, p_inside_range = c(0.01,0.1,0.25,0.5), p_outside_range = c(0.01,0.1,0.25,0.5), method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "VGAE", "ST_l1Spectral", "Spectrum", "Hybrid", "MCL")) {
+merge_simulation_results <- function(path, n, k, p_inside_range = c(0.01,0.1,0.25,0.5), p_outside_range = c(0.01,0.1,0.25,0.5), method = c("l1Spectral", "Spectral", "regSpectral","robustSpectral", "VGAE", "ST_l1Spectral", "Spectrum", "Hybrid", "MCL")) {
   all_files <- list.files(paste0(path,"/results"), full.names = FALSE)
   
   data_full_list <- list()
 
   for (p_inside in p_inside_range){
     for (p_outside in p_outside_range){
-      data_pattern <- paste0(path,"/data/data_n=", n,"_density=",sprintf("%g", d), "_p_inside=", sprintf("%.2f", p_inside), "_p_outside=", sprintf("%.2f", p_outside),".Rdata")
+      data_pattern <- paste0(path,"/data/data_n=", n,"_k=",sprintf("%g", k), "_p_inside=", sprintf("%.2f", p_inside), "_p_outside=", sprintf("%.2f", p_outside),".Rdata")
       if (!file.exists(data_pattern)) next
       load(data_pattern)
       
       for (current_method in method){
         file_pattern <- paste0("results_", current_method, 
                                "_n=", n, 
-                               "_density=", sprintf("%g", d), 
+                               "_k=", sprintf("%g", k), 
                                "_p_inside=", sprintf("%.2f", p_inside), 
                                "_p_outside=", sprintf("%.2f", p_outside))
         
@@ -50,8 +50,10 @@ merge_simulation_results <- function(path, n = NULL, d = NULL, p_inside_range = 
               ami_corr <- NA
               cov_val <- NA
               current_miss <- NA
+              est_k <- NA
             } else {
               idx <- which(clus_est != 0) 
+              est_k <- length(unique(clus_est[idx]))
               if(length(idx) > 0) {
                 ami_corr <- aricode::AMI(clus_est[idx], true_clus[idx])
                 cov_val <- length(idx) / length(true_clus)
@@ -83,11 +85,12 @@ merge_simulation_results <- function(path, n = NULL, d = NULL, p_inside_range = 
               coverage = cov_val,
               Miss = current_miss,
               Miss_perc = current_miss / n,
+              Estimated_k = est_k,  
               Method = current_method,
               p_inside = p_inside,
               p_outside = p_outside,
               n = n,
-              density = d
+              k = k
             )
           }
         }
@@ -109,6 +112,7 @@ merge_simulation_results <- function(path, n = NULL, d = NULL, p_inside_range = 
                 Mean_Miss  = mean(Miss, na.rm = TRUE),
                 Mean_Miss_perc = mean(Miss_perc, na.rm = TRUE),
                 Mean_Coverage = mean(coverage, na.rm = TRUE),
+                Mean_Estimated_k = mean(Estimated_k, na.rm = TRUE),
                 .groups = "drop"
                 )
   return(list(Full=Data_Full,Summary=Data_Summary))
@@ -119,50 +123,154 @@ merge_simulation_results <- function(path, n = NULL, d = NULL, p_inside_range = 
 #' @param df List. The output object from the \code{merge_simulation_results} function, 
 #' containing \code{Full} and \code{Summary} data frames.
 #' @param n Integer. The number of nodes.
-#' @param d Numeric. The graph density.
+#' @param k Numeric. Number of clusters.
 #'
 #' @return A \code{ggplot} object representing the performance grid across 
 #' internal (\code{p_inside}) and external (\code{p_outside}) perturbation levels.
 #' 
 #' @import ggplot2
+#' @import dplyr
+#' @import tidyr
 #' @export
-plot_perf <- function(df, n, d) {
-  # df is the output of merge_simulation_results function 
-  p <- ggplot(df$Full,aes(x=Method, y=AMI,fill=Method)) +
-    geom_boxplot(outlier.shape = NA)+scale_fill_manual(values=c("peachpuff","sandybrown","lightsalmon","lightsalmon3","tomato4","slategray2","steelblue1","steelblue3","steelblue4"))+
-    facet_grid(p_outside~p_inside)+ scale_y_continuous(limits=c(0,1)) +
-    theme_bw()+scale_x_discrete(guide = guide_axis(angle = 45))
-  p <- p +geom_point(data = subset(df$Summary, Category == "Non self-tuned"),
-                     mapping=aes(y=Mean_Miss_perc,x=Method),
-                     stat="identity",
-                     #position= position_dodge(width = .9),
-                     pch=5,
-                     size=1,color="red") + ggtitle(paste0("n=",n," and d=",d))
+plot_perf <- function(df, n, k) {
+
+  # 1. Reshape data for l1 methods
+  l1_methods <- c("l1Spectral", "ST_l1Spectral")
+  df_plot <- df$Full %>% mutate(Metric = "Standard")
+  df_corrected <- df_plot %>%
+    filter(Method %in% l1_methods) %>%
+    mutate(AMI = AMI_corrected, Metric = "Corrected")
+  
+  df_final <- bind_rows(df_plot, df_corrected) %>%
+    mutate(Metric = factor(Metric, levels = c("Standard", "Corrected")))
+  
+  # 2. Colors & categories
+  methods_non  <- unique(df$Full$Method[df$Full$Category == "Non self-tuned"])
+  methods_self <- unique(df$Full$Method[df$Full$Category == "Self-tuned"])
+  
+  warm_refined <- c("#FAD7A0", "#F8C471", "#E59866", "#D35400", "#A04000")
+  cool_refined <- c("#AED6F1", "#5DADE2", "#2E86C1", "#1B4F72")
+  final_palette <- c(warm_refined[1:length(methods_non)], 
+                     cool_refined[1:length(methods_self)])
+  
+  # 3. Main plot
+  p <- ggplot(df_final, aes(x = Method, y = AMI, fill = Method)) +
+    geom_boxplot(
+      aes(alpha = Metric), 
+      outlier.shape = NA, 
+      linewidth = 0.4, 
+      fatten = 1.5,
+      position = position_dodge(width = 0.8)
+    ) +
+    scale_alpha_manual(values = c("Standard" = 1, "Corrected" = 0.35)) +
+    scale_fill_manual(values = final_palette) +
+    facet_grid(p_outside ~ p_inside, labeller = labeller(
+      p_inside = function(x) paste0("p_in = ", x),
+      p_outside = function(x) paste0("p_out = ", x)
+    )) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +
+    theme_bw() +
+    theme(
+      panel.background = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      panel.grid.major = element_line(color = "gray92", linewidth = 0.5),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5),
+      legend.position = "bottom",
+      legend.box = "vertical",
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  p <- p + guides(
+    fill = guide_legend(
+      title = "Method Category (Row 1: Non Self-Tuned | Row 2: Self-Tuned)",
+      nrow = 2, byrow = TRUE, order = 1
+    ),
+    alpha = guide_legend(
+      title = "AMI Type:",
+      # Using gray50 makes the transparency visible without picking a specific method's color
+      override.aes = list(fill = "gray50"), 
+      order = 2
+    )
+  )
+  
+  p <- p + geom_vline(xintercept = length(methods_non) + 0.5, linetype = "dotted")
+  
+  return(p + labs(title = paste0("n = ", n, " and k = ", k), y = "AMI"))
 }
 
-ggplot(subset(df$Full, Category == "Non self-tuned"), aes(x = coverage, y = AMI_corrected, color = Method)) +
-  # Add a bit of jitter so overlapping points (like Spectral at 100%) are visible
-  geom_jitter(alpha = 0.4, size = 1.5, width = 0.01, height = 0.01) +
-  # Add a mean point for each method to highlight the center of the cluster
-  stat_summary(fun = mean, geom = "point", shape = 18, size = 5, stroke = 1.5) +
-  facet_grid(p_outside ~ p_inside, labeller = label_both) +
-  scale_y_continuous(limits = c(0, 1)) +
-  scale_x_continuous(limits = c(0, 1.05), breaks = c(0, 0.5, 1)) +
-  theme_bw() +
-  labs(
-    title = "Precision-Recall Trade-off in Community Detection",
-    subtitle = "Diamonds represent the centroid of each method's performance",
-    x = "Coverage (% of Nodes Clustered)",
-    y = "Precision (AMI on Clustered Nodes Only)"
-  ) +
-  scale_color_manual(values = c(
-    "l1Spectral" = "red", "ST_l1Spectral" = "darkred",
-    "Spectral" = "steelblue", "regSpectral" = "blue", 
-    "GNN" = "darkgreen", "MCL" = "orange"
-  ))
-
-n<- 1000
-d<- 0.005
-df <- merge_simulation_results(path= "/Users/mchampion/Documents/GitHub/l1spectralclustering/",n,d)
-g <- plot_perf(df, n,d)
-g
+#' Plot estimated number of clusters
+#'
+#' @param df List. The output object from the \code{merge_simulation_results} function, 
+#' containing \code{Full} and \code{Summary} data frames.
+#' @param n Integer. The number of nodes.
+#' @param k Numeric. True number of clusters.
+#'
+#' @return A \code{ggplot} object representing the estimated number of clusters across 
+#' internal (\code{p_inside}) and external (\code{p_outside}) perturbation levels.
+#' 
+#' @import ggplot2
+#' @export
+plot_n_cluster <- function(df, n, k){
+  df_plot <- df$Full %>% filter(Method %in% c("ST_l1Spectral", "Spectrum", "Hybrid", "MCL")) %>%
+    mutate(Method = factor(Method))
+  
+  # 1. Define order and palette
+  methods_order <- c("ST_l1Spectral", "Spectrum", "Hybrid", "MCL")
+  cool_refined  <- c("#AED6F1", "#5DADE2", "#2E86C1", "#1B4F72")
+  names(cool_refined) <- methods_order
+  
+  # 2. Main plot
+  g <- ggplot(df_plot, aes(x = Method, y = Estimated_k, fill = Method)) +
+    
+    # Layer 1: Black jittered dots
+    geom_jitter(
+      color = "black",      
+      position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
+      alpha = 0.4,          
+      size = 0.4
+    ) + 
+    
+    # Layer 2: Boxplot with colored fill and black borders/medians 
+    geom_boxplot(
+      color = "black",      # Black borders and median line
+      outlier.shape = NA, 
+      linewidth = 0.5, 
+      fatten = 2,           
+      position = position_dodge(width = 0.8)
+    ) +
+    
+    # Apply the blue palette to the fill of the boxes
+    scale_fill_manual(values = cool_refined) +
+    
+    # Facet layout 
+    facet_grid(p_outside ~ p_inside, labeller = labeller(
+      p_inside = function(x) paste0("p_in = ", x),
+      p_outside = function(x) paste0("p_out = ", x)
+    )) +
+    
+    # Reference line for ground truth 
+    geom_hline(yintercept = k, linetype = "dashed", color = "black", alpha = 0.5) +
+    
+    # Styling and theme
+    scale_y_continuous(breaks = c(1, 10, 20, 30)) +
+    theme_bw() +
+    theme(
+      panel.background = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      panel.grid.major = element_line(color = "gray92", linewidth = 0.5),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5),
+      legend.position = "bottom",
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    ) +
+    labs(
+      y = expression(Estimated~Number~of~Clusters),
+      x = "Method"
+    )
+  
+  # 4. Legend styling
+  g <- g + guides(
+    fill = guide_legend(nrow = 1)
+  )
+}
