@@ -89,13 +89,14 @@ RunSimulations <- function(graph_obj, method = c("l1Spectral", "Spectral", "regS
 #'   Typically includes cluster assignments.
 #' 
 #' @importFrom l1spectral l1_spectralclustering
+#' @importFrom purrr possibly
 #' @export
 #'
 l1Spectral <- function(A,k = NULL){
   run_l1Spectral <- function(mat, centers) {
-    Structure <- FindStructure(A = mat)
-    k_hat <- FindNbrClusters(A = mat, structure  = Structure, k = centers, k_max = 25)
-    results_l1Spectral <- l1spectral::l1_spectralclustering(A=mat,pen="thresholdedLS",k=k_hat$nbr_clusters_total ,k_max=20)
+    Structure <- l1spectral::FindStructure(A = mat)
+    k_hat <- l1spectral::FindNbrClusters(A = mat, structure  = Structure, k = centers, k_max = 25)
+    results_l1Spectral <- l1spectral::l1_spectralclustering(A=mat,pen="thresholdedLS",k=k_hat$nbr_clusters_total ,k_max=25)
     if (!is.null(ncol(results_l1Spectral$comm))){
       clusters <- results_l1Spectral$comm%*%c(1:ncol(results_l1Spectral$comm))
     } else {
@@ -177,8 +178,7 @@ robustSpectral <- function(A, k) {
   reticulate::source_python(python_path)
   
   A_mat <- matrix(as.numeric(as.matrix(A)),nrow=nrow(A))
-  
-  run_rsc(A_mat, as.integer(k), as.numeric(theta))
+  clusters <- run_rsc(A_mat, as.integer(k))
   clusters <- clusters + 1 # to rename the clusters starting from 1
   clusters <- as.vector(clusters)
   return(clusters)
@@ -221,9 +221,7 @@ args.hidden2_dim = 16
   torch <- import("torch")
   adj_norm  <- torch$tensor(as.matrix(A_norm_mat), dtype=torch$float32)
   
-  vgae_inst <- model_lib$VGAE(adj_norm)
   torch_f <- import("torch.nn.functional")
-  
   
   adj_label <- torch$tensor(as.matrix(A + diag(n_nodes)), dtype=torch$float32)
   features  <- torch$eye(as.integer(n_nodes), dtype=torch$float32)
@@ -240,6 +238,10 @@ args.hidden2_dim = 16
   weight_vec[edge_indices] <- pos_weight
   weight_tensor <- torch$tensor(weight_vec, dtype = torch$float32)
   
+  total_entries <- n_nodes * n_nodes
+  non_edges <- total_entries - sum(A)
+  norm_val <- total_entries / (non_edges * 2)
+  
   for (epoch in 1:200) {
     vgae_inst$train()
     optimizer$zero_grad()
@@ -252,7 +254,7 @@ args.hidden2_dim = 16
     adj_label_flat <- adj_label$contiguous()$reshape(-1L)
     
     # 3. Now run the loss
-    log_lik <- norm * torch_f$binary_cross_entropy(A_pred_flat, adj_label_flat, weight = weight_tensor)
+    log_lik <- norm_val * torch_f$binary_cross_entropy(A_pred_flat, adj_label_flat, weight = weight_tensor)
     kl <- 0.5 / n_nodes * torch$sum(1 + 2*vgae_inst$logstd - vgae_inst$mean^2 - torch$exp(vgae_inst$logstd)^2, 1L)$mean()
     
     loss <- log_lik - kl
@@ -304,6 +306,7 @@ Hybrid <- function(A){
 #' @param A An adjacency matrix.
 #' @return A numeric vector of cluster assignments.
 #' @importFrom MCL mcl
+#' @importFrom purrr possibly
 #' @export
 MCL <- function(A){
   run_mcl <- function(mat) {
