@@ -52,11 +52,11 @@ ggsave(
   filename = paste0("Simulation_Results_n=",n,"_k=",k,".pdf"), 
   plot = g,
   device = "pdf",
-  path = paste0(path,"/results"), # Saves into a 'figures' folder
-  width = 12,                   # Inches
+  path = paste0(path,"/results"), 
+  width = 12,                   
   height = 8, 
   units = "in",
-  dpi = 300                     # High resolution
+  dpi = 300                     
 )
 ```
 
@@ -71,10 +71,10 @@ ggsave(
   filename = paste0("Simulation_Results_n=",n,"_k=",k,"_n_cluster.pdf"), 
   plot = g,
   device = "pdf",
-  path = paste0(path,"/results"), # Saves into a 'figures' folder
-  width = 12,                   # Inches
+  path = paste0(path,"/results"), 
+  width = 12,                   
   height = 8, 
   units = "in",
-  dpi = 300                     # High resolution
+  dpi = 300                     
 )
 ```

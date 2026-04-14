@@ -140,7 +140,7 @@ for (s in (settings)){
         data_path <- file.path(path.package("l1spectralclustering"), "data")
         results_path <- file.path(path.package("l1spectralclustering"), "results")
         file_suffix <- sprintf("n=%d_k=%g_p_inside=%.2f_p_outside=%.2f.Rdata", 
-                       n, d, p_inside, p_outside)
+                       n, k, p_inside, p_outside)
         data_file    <- file.path(data_path, paste0("data_", file_suffix))
         results_file <- file.path(results_path, paste0("results_", current_method,"_",file_suffix))
         
