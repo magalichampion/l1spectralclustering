@@ -19,17 +19,17 @@ This vignette details the generation of synthetic networks used for benchmarking
 
 # Simple simulation example
 
-This code can be used to generate a single dataset. In this example, we set the density $d$ and the number of nodes $n$ to create a graph with a specific number of clusters ($k=n\times d$).
+This code can be used to generate a single dataset. In this example, we set the number of nodes $n$ to create a graph with a specific number of clusters $k$.
 
 ```{r}
 # Set the parameters to simulate data
-d <- 0.1 # density (n*d = k, number of clusters)
+k <- 10 # number of clusters
 n <- 100 # number of nodes
 p <- list(p_inside = 0.1, p_outside = 0.05) # perturbations
 rngSEED <- 12345L
 
 # Run the code to simulate the data
-data <- CreateDataSet(k = d*n, n, p, rngSEED)
+data <- CreateDataSet(k, n, p, rngSEED)
 ```
 
 
@@ -38,11 +38,13 @@ data <- CreateDataSet(k = d*n, n, p, rngSEED)
 To robustly evaluate performance, we simulate data across a wide range of parameter combinations. For every set of parameters, we generate $100$ independent perturbed graphs. 
 
 ```{r}
+library(here)
+
 # data directory
-path_data <- here::here("data")
+data_path <- file.path(path.package("l1spectralclustering"), "data")
 
 # define the parameters
-density_range <- c(0.005,0.01,0.02,0.05,0.1,0.2) # density of the graph (k/n)
+k_range <- c(5, 10, 20) # number of clusters
 n_range <- c(50,100,500,1000) # number of nodes
 p_inside_range <- c(0.01,0.1,0.25,0.5)
 p_outside_range <- c(0.01,0.1,0.25,0.5)
@@ -51,36 +53,36 @@ n_graphs <- 100 # number of perturbed graphs to simulate
 
 # run the code to simulate the data
 for(n in n_range){
-  for(d in density_range){
+  for(k in k_range){
     for(p_inside in p_inside_range){
       for (p_outside in p_outside_range){
-        if (d*n <= 2 || d*n > 25) {
-          message(sprintf("Skipping: n=%d, d=%.2f (k=%.1f out of bounds)", n, d, d*n))
+        if (k/n < 3) {
+          message(sprintf("Skipping: n=%d, k=%g", n, k))
           next 
         }
         graphs <- list() # to store the simulated graphs
         
-        ClustersLength <- rep(floor(1/d),d*n)
+        ClustersLength <- rep(floor(n/k),k)
         
         if (length(ClustersLength)>1){
           # there should be at least two clusters
           if (sum(ClustersLength)!=n){
             ClustersLength[length(ClustersLength)] <- n-sum(ClustersLength[-length(ClustersLength)])
           }
-          data <- CreateDataSet(k=d*n, n=n, p=list(p_inside=p_inside,p_outside=p_outside), print.plot = TRUE, ClustersLength = ClustersLength)
+          data <- CreateDataSet(k=k, n=n, p=list(p_inside=p_inside,p_outside=p_outside), print.plot = TRUE, ClustersLength = ClustersLength)
           ClustersLength <- data$ClustersLength
           
           graphs <-  c(graphs,list(data))
           for(c in 2:n_graphs){
-            data <- CreateDataSet(k=d*n, n=n, p=list(p_inside=p_inside,p_outside=p_outside), print.plot = FALSE, ClustersLength = ClustersLength)
+            data <- CreateDataSet(k=k, n=n, p=list(p_inside=p_inside,p_outside=p_outside), print.plot = FALSE, ClustersLength = ClustersLength)
             
             graphs <-  c(graphs,list(data))
           }
           names(graphs) <- paste0("Graph",1:n_graphs)
           
           # define the specific filename for this (n, density, noise) combination
-          file_name <- sprintf("data_n=%d_density=%.2f_p_inside=%.2f_p_outside=%.2f.Rdata", 
-                     n, d, p_inside, p_outside)
+          file_name <- sprintf("data_n=%d_k=%g_p_inside=%.2f_p_outside=%.2f.Rdata", 
+                     n, k, p_inside, p_outside)
 
           # construct the full destination path
           full_path <- file.path(path_data, file_name)
