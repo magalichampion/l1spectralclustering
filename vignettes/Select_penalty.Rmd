@@ -1,0 +1,194 @@
+---
+title: "Technical illustration of the penalty selection and stability"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Technical illustration of the penalty selection and stability}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(l1spectralclustering)
+library(glmnet)
+library(cvTools)
+library(dplyr)
+library(scales)
+```
+
+This vignette demonstrates the behavior of the $\ell_1$ (Lasso) and thresholded least-squares penalties in the context of the $\ell_1$-spectral clustering. We visualize how the coefficients evolve and how optimal parameters $\lambda$ and $t$ are selected. This code was used to generate Figure 1 of the manuscript.
+
+# Simulation setup
+
+We investigate the stability of the penalty selection under four levels of perturbation ($p \in \{0.01,0.1,0.25,0.5\}$).
+
+```{r}
+# Accessing data through the package structure
+data_path <- system.file("data", package = "l1spectralclustering")
+p_range <- c(0.01, 0.1, 0.25, 0.5)
+```
+
+# Main loop
+
+The following code iterates through the perturbation levels to extract the Lasso paths and the thresholded least-squares stability zones.
+
+```{r}
+all_data <- list()
+optima_list <- list()
+
+for (p in p_range){
+  p_str <- sprintf("%.2f", p) 
+  
+  #file_name <- file.path(data_path, paste0("data_n=500_k=10_p_inside=", p_str, "_p_outside=", p_str, ".Rdata"))
+  #load(file_name)
+  load(paste0("/Users/mchampion/Documents/GitHub/l1spectralclustering/data/data_n=500_k=10_p_inside=", p_str, "_p_outside=", p_str, ".Rdata"))
+  
+  A <- graphs$Graph2$A_hat
+  n <- ncol(A)
+  k <- length(graphs$Graph2$ClustersLength)
+    
+  Structure <- l1spectral::FindStructure(A)
+  clusters <- l1spectral::FindNbrClusters(A, structure  = Structure, k = k)
+  Elements <- l1spectral::FindElement(A = A, structure = Structure, clusters = clusters)
+    
+  index <- Elements$indices$Component1[1]
+  index_neighbors <- which(graphs$Graph2$clusters == graphs$Graph2$clusters[index])
+    
+  svd <- eigen(A)
+  eigenvalues <- sort(svd$values,index.return=TRUE)
+  eigenvectors <- svd$vectors[,eigenvalues$ix]
+    
+  U <- t(eigenvectors[,1:(n-k)])
+    
+  w <- U[,index]
+  W <- matrix(U[,-index],ncol=(ncol(U)-1),nrow=nrow(U))
+    
+  # 1. Lasso solution path
+  lasso <- glmnet(-W,w)
+  Beta <- lasso$beta
+    
+  # 2. Cross-validation for Lambda
+  lassosol <- cv.glmnet(W,-w)
+  cvtop<- min(lassosol$cvm)+5*(max(lassosol$cvm)-min(lassosol$cvm))/100
+  error <- min(lassosol$cvm[lassosol$cvm>cvtop])
+  lambda_opt <- lassosol$lambda[which(lassosol$cvm==error)]
+  I <- which(lasso$lambda==lambda_opt)
+  l1_norm_opt <- colSums(Beta)[I]
+
+  # 3. Thresholded least-squares
+  groups <- cvFolds(nrow(W),K=5)
+  T_grid <- seq(from=0, to=1,0.01)
+      
+  error_cv <- sapply(T_grid, function(t) {
+        sapply(1:5, function(g) {
+            train <- which(groups$which != g)
+            test <- which(groups$which == g)
+            sol <- as.vector(glmnet(W[train,], -w[train], lambda=0)$beta)
+            sol[abs(sol) < t] <- 0
+            sqrt(mean((W[test,] %*% sol - (-w[test]))^2))
+        }) %>% mean()
+    })
+
+  t_opt <- T_grid[which.min(error_cv)]
+  
+  # Collect results for plotting  
+  tmp_df <- data.frame(
+        L1norm = rep(colSums(abs(Beta)), each = n-1),
+        Coeff = as.vector(Beta),
+        Number = rep(1:(n-1), ncol(Beta)),
+        Perturbation = paste0("p=", p_str)
+    ) %>%
+    mutate(IsSignal = Number %in% index_neighbors)
+    
+    all_data[[p_str]] <- tmp_df
+    optima_list[[p_str]] <- data.frame(Perturbation = paste0("p=", p_str), 
+                                       v_line = l1_norm_opt, h_line = t_opt)
+}
+plot_data <- bind_rows(all_data)
+optima_df <- bind_rows(optima_list)
+```
+
+# Visualizing the selection stability
+
+The plot below shows the Lasso paths (lines). Red paths represent the signal (true neighbors), while black paths represent noise. The dashed green lines indicate the optimal $\ell_1$-norm and the threshold $t$ selected by the package.
+
+```{r}
+sym_sqrt_trans <- trans_new(
+    name = "sym_sqrt",
+    transform = function(x) sign(x) * sqrt(abs(x)), 
+    inverse = function(x) sign(x) * x^2             
+)
+
+tol <- 0.10 # 10% tolerance window
+rect_plot_robust <- optima_df %>%
+    mutate(
+        # Vertical Stability Zone (L1-norm penalty)
+        xmin = v_line * (1 - tol),
+        xmax = v_line * (1 + tol),
+        
+        # Horizontal Stability Zone (Coefficient threshold t)
+        ymin = h_line * (1 - tol),
+        ymax = h_line * (1 + tol)
+    )
+label_data <- optima_df %>%
+    mutate(
+        # Move v label to the top right of the crosshair
+        v_label_x = v_line * 1.1,
+        # Move h label slightly above the crosshair
+        h_label_y = h_line + 0.05
+    )
+ggplot() +
+    # Robust Vertical Zone
+    geom_rect(data = rect_plot_robust, 
+              aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+              fill = "gray80", alpha = 0.4) +
+    
+    # Robust Horizontal Zone
+    geom_rect(data = rect_plot_robust,
+              aes(xmin = 0.1, # Use a small number >0 for log1p transform compatibility
+                  xmax = max(plot_data$L1norm), 
+                  ymin = ymin, ymax = ymax),
+              fill = "gray70", alpha = 0.2) +
+    
+    # The Lasso Paths
+    geom_line(data = plot_data, 
+              aes(x = L1norm, y = Coeff, group = Number, 
+                  color = IsSignal, linewidth = IsSignal, alpha = IsSignal),
+              show.legend = FALSE) +
+    
+    # Decision Crosshairs (Dashed Green) 
+    # Vertical (l1_opt)
+    geom_vline(data = optima_df, aes(xintercept = v_line), 
+               color = "forestgreen", linetype = "dashed", linewidth = 0.8) +
+    # Horizontal (t_opt)
+    geom_hline(data = optima_df, aes(yintercept = h_line), 
+               color = "forestgreen", linetype = "dashed", linewidth = 0.8) +
+    
+    # Text Labels 
+    # Label t_opt (placed on the left side)
+    geom_text(data = label_data, 
+              aes(x = 0.1, y = h_line, label = "t[opt]"), 
+              color = "forestgreen", vjust = -0.5, hjust = 0, parse = TRUE, size = 3.5) +
+    # Label l1_opt (placed vertically)
+    geom_text(data = label_data, 
+              aes(x = v_line, y = 1.0, label = "l[1*','*opt]"), 
+              color = "forestgreen", angle = 90, vjust = -0.5, parse = TRUE, size = 3.5) +
+    
+    # Scales and Aesthetics 
+    # Map aesthetics manually: Red=thick/solid, Black=thin/transparent
+    scale_linewidth_manual(values = c("FALSE" = 0.3, "TRUE" = 0.3)) +
+    scale_alpha_manual(values = c("FALSE" = 0.2, "TRUE" = 1.0)) +
+    scale_color_manual(values = c("FALSE" = "black", "TRUE" = "red")) +
+    
+    scale_x_continuous(trans = "log1p") + 
+    scale_y_continuous(trans = sym_sqrt_trans, 
+                       breaks = c(-1, -0.5, 0, 0.5, 1)) +
+    
+    facet_wrap(~Perturbation, scales = "fixed") + 
+    theme_minimal() +
+    labs(x = "l1-norm", y = "Coefficient value") +
+    theme(panel.grid.minor = element_blank())
+```

@@ -47,14 +47,24 @@ Corr <- cor(t(Data))
 Corr[abs(Corr) < 0.70] <- 0
 Corr[abs(Corr) >= 0.70] <- 1
 diag(Corr) <- 0
+
+length(which(Corr==1))
+length(which(Corr==0))
+Corr <- Corr[-which(rowSums(Corr)==0),-which(rowSums(Corr)==0)]
 ```
 
 # Application of the l1-spectral clustering
 
 ```{r}
+# Prepare the data
+patient_names <- rownames(Corr)
+A <- Corr
+colnames(A) = rownames(A) = NULL
+
 # Run l1-spectral clustering
-clusters <- l1_spectralclustering(A=Corr, pen="thresholdedLS", stab=FALSE) # to verify
-# and add the code to plot the figure
+results <- l1_spectralclustering(A=A, pen="thresholdedLS") 
+clusters <- results$comm%*%c(1:ncol(results$comm))
+clusters <- as.vector(clusters)
 
 # Save results
 results_path <- file.path(path.package("l1spectralclustering"), "results")
