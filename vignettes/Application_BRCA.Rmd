@@ -10,6 +10,8 @@ vignette: >
 ```{r setup, message=FALSE, warning=FALSE}
 library(l1spectralclustering)
 library(matrixStats)
+library(Hmisc)
+library(igraph)
 library(FactoMineR)
 library(factoextra)
 library(limma)
@@ -42,29 +44,54 @@ Data <- MA_TCGA[,I]
 # Construction of the co-expression network
 
 ```{r}
-# Thresholded correlation matrix
-Corr <- cor(t(Data))
-Corr[abs(Corr) < 0.70] <- 0
-Corr[abs(Corr) >= 0.70] <- 1
-diag(Corr) <- 0
+# Correlation matrix
+Corr <- rcorr(t(Data))
 
-length(which(Corr==1))
-length(which(Corr==0))
-Corr <- Corr[-which(rowSums(Corr)==0),-which(rowSums(Corr)==0)]
+# Threshold choice
+corr_threshold <- seq(0,1,0.05)
+pval_threshold <- seq(0,0.05,0.01)
+
+Corr_bis <- Corr$r
+I <- which(Corr$P<0.05)
+Corr_bis[-I] <- 0
+
+Edges <- c()
+for (i in (1:length(corr_threshold))){
+  Corr_tmp <- Corr_bis
+  
+  if (length(which(abs(Corr_tmp) < corr_threshold[i]))!=0){
+    Corr_tmp[abs(Corr_tmp) < corr_threshold[i]] <- 0
+    Corr_tmp[abs(Corr_tmp) >= corr_threshold[i]] <- 1
+    if (length(which(rowSums(Corr_tmp)==0))!=0){
+      Corr_tmp <- Corr_tmp[-which(rowSums(Corr_tmp)==0),-which(rowSums(Corr_tmp)==0)]
+    }
+  } else {
+    Corr_tmp <- Corr_tmp
+  }
+  
+  Edges <- c(Edges,length(which(Corr_tmp>0))/2)
+}
+plot(corr_threshold,Edges,type='l',xlab = "Correlation threshold",ylab="Number of edges")
+abline(v=0.8,col="red") # this is the best threshold
+
+Corr_bis[abs(Corr_bis) < 0.80] <- 0
+Corr_bis[abs(Corr_bis) >= 0.80] <- 1
+diag(Corr_bis) <- 0
 ```
 
 # Application of the l1-spectral clustering
 
 ```{r}
 # Prepare the data
-patient_names <- rownames(Corr)
-A <- Corr
+patient_names <- rownames(Corr_bis)
+A <- Corr_bis
 colnames(A) = rownames(A) = NULL
 
 # Run l1-spectral clustering
 results <- l1_spectralclustering(A=A, pen="thresholdedLS") 
 clusters <- results$comm%*%c(1:ncol(results$comm))
 clusters <- as.vector(clusters)
+names(clusters) <- patient_names
 
 # Save results
 results_path <- file.path(path.package("l1spectralclustering"), "results")
@@ -74,12 +101,68 @@ save(clusters,file = results_file)
 
 # Biological characterization of the subtypes
 
+```{r}
+Subtypes <- Subtypes[names(clusters)]
+
+nnclass <- which(clusters==0)
+clusters_small <- clusters[-nnclass]
+Subtypes_small <- Subtypes[-nnclass]
+
+table(clusters_small,Subtypes_small)
+chisq.test(table(clusters_small,Subtypes_small))
+```
+## Network visualization (Figure 4)
+
+```{r}
+Corr_Thresh <- Corr$r
+Corr_Thresh[abs(Corr_Thresh) < 0.9] <- 0
+Corr_Thresh[abs(Corr_Thresh) >= 0.9] <- 1 # for visualization only
+diag(Corr_Thresh) <- 0
+
+Corr_Thresh_small <- Corr_Thresh[names(clusters_small),names(clusters_small)]
+I <- which(rowSums(Corr_Thresh_small)==0)
+Corr_Thresh_small <- Corr_Thresh_small[-I,-I]
+clusters_Thresh_small <- clusters_small[-I]
+
+# 1. Colors 
+cluster_colors <- c("#1E3AB1", "#BCF634", "#F64E34", "orange", "purple")
+
+# 2. Create the graph from the matrix
+g <- graph_from_adjacency_matrix(as.matrix(Corr_Thresh_small), 
+                                 mode = "undirected", 
+                                 diag = FALSE)
+
+# 3. Calculate node sizes 
+V(g)$size <- (degree(g) / max(degree(g))) * 4 + 1.5
+
+# 4. Assign the colors
+V(g)$color <- cluster_colors[as.factor(clusters_Thresh_small)]
+
+# 5. Generate layout
+coords <- layout_with_fr(g, niter = 1000)
+coords <- coords * 2.5 
+
+# 6. Final plot
+pdf(paste0(results_path,"/Patient_Similarity_Network.pdf"), width = 10, height = 10)
+plot(g, 
+     layout = coords,
+     vertex.label = NA,
+     vertex.color = V(g)$color,
+     vertex.frame.color = "white", 
+     vertex.frame.width = 0.3,
+     vertex.size = V(g)$size,
+     edge.color = adjustcolor("gray40", alpha.f = 0.4), 
+     edge.width = 0.6,
+     main = "Network")
+dev.off()
+```
+
 ## PCA visualization (Figure 5)
 
 ```{r}
 # PCA
-PCA_df <- as.data.frame(MA_TCGA[names(clusters), ])
-PCA_df$Clusters <- factor(clusters)
+PCA_df <- as.data.frame(MA_TCGA[names(clusters_small), ])
+PCA_df$Clusters <- factor(clusters_small)
 
 res.pca <- PCA(PCA_df, quali.sup = "Clusters", graph = FALSE)
 
@@ -87,24 +170,37 @@ PCA_fig <- fviz_pca_biplot(res.pca,
                            # Individuals
                            habillage = "Clusters", 
                            addEllipses = TRUE, 
-                           ellipse.level = 0.5,
+                           ellipse.level = 0.25,
                            geom = "point",
+                           pointsize = 2,
                            
                            # Variables (Genes)
-                           select.var = list(name = c("MCM2", "MKI67", "ETS1")), 
+                           select.var = list(contrib = 10), 
                            col.var = "black", 
-                           repel = TRUE, # Avoid label overlapping
+                           repel = TRUE, 
                            
                            # Aesthetics
                            title = "PCA Biplot") +
+  
+  # 1. Custom High-Contrast Palette
+  # 1: Royal Blue, 2: Lime Green, 3: Crimson, 4: Vivid Orange, 5: Forest Green
   scale_color_manual(name = "Clusters", 
-                     labels = c("1", "2", "3", "4"),
-                     values = c("#1E3AB1", "#BCF634", "#F64E34", "orange")) +
+                     labels = c("1", "2", "3", "4", "5"),
+                     values = c("#1E3AB1", "#BCF634", "#F64E34", "orange","purple")) +
+  
+  # 2. Matching Fill for Ellipses
   scale_fill_manual(name = "Clusters", 
-                    labels = c("1", "2", "3", "4"),
-                    values = c("#1E3AB1", "#BCF634", "#F64E34", "orange")) +
+                    labels = c("1", "2", "3", "4", "5"),
+                    values = c("#1E3AB1", "#BCF634", "#F64E34", "orange","purple")) +
+  
+  # 3. Shape assignment (19: circle, 17: triangle, 15: square, 3: plus, 18: diamond)
+  scale_shape_manual(values = c(19, 17, 15, 3, 18)) +
+  
+  # 4. Hide the redundant shape legend
   guides(shape = "none") +
-  theme_minimal()
+  
+  theme_minimal() +
+  theme(legend.position = "right")
 
 PCA_fig
 
@@ -125,14 +221,16 @@ ggsave(filename = c("PCA_figure.pdf"),
 pathway_file <- file.path(data_path, "h.all.v2026.1.Hs.symbols.gmt")
 pathways <- gmtPathways(pathway_file)
 
-n_clusters <- length(table(clusters))
+n_clusters <- length(table(clusters_small))
 
 for (c in (1:n_clusters)){
   # 1. Differential expression (one vs all)
-  group <- factor(ifelse(clusters == c, "Cluster_c", "Base"))
+  group <- factor(ifelse(clusters_small == c, "Cluster_c", "Base"))
   design <- model.matrix(~group)
 
-  fit <- lmFit(t(MA_TCGA[names(clusters),]), design)
+  data <- MA_TCGA
+  data <- data[names(clusters_small),]
+  fit <- lmFit(t(data), design)
   fit <- eBayes(fit)
 
   # 2. Rank genes
