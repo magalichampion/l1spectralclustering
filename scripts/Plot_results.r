@@ -85,7 +85,8 @@ merge_simulation_results <- function(path, n, k, p_inside_range = c(0.01,0.1,0.2
               coverage = cov_val,
               Miss = current_miss,
               Miss_perc = current_miss / n,
-              Estimated_k = est_k,  
+              Estimated_k = est_k, 
+              Time = results$Time[g],
               Method = current_method,
               p_inside = p_inside,
               p_outside = p_outside,
@@ -113,6 +114,8 @@ merge_simulation_results <- function(path, n, k, p_inside_range = c(0.01,0.1,0.2
                 Mean_Miss_perc = mean(Miss_perc, na.rm = TRUE),
                 Mean_Coverage = mean(coverage, na.rm = TRUE),
                 Mean_Estimated_k = mean(Estimated_k, na.rm = TRUE),
+                Mean_Time = mean(Time, na.rm=TRUE),
+                Median_Time = median(Time, na.rm=TRUE),
                 .groups = "drop"
                 )
   return(list(Full=Data_Full,Summary=Data_Summary))
