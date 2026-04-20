@@ -178,6 +178,7 @@ PCA_fig <- fviz_pca_biplot(res.pca,
                            select.var = list(contrib = 10), 
                            col.var = "black", 
                            repel = TRUE, 
+                           labelsize = 6,
                            
                            # Aesthetics
                            title = "PCA Biplot") +
@@ -200,7 +201,13 @@ PCA_fig <- fviz_pca_biplot(res.pca,
   guides(shape = "none") +
   
   theme_minimal() +
-  theme(legend.position = "right")
+  theme(legend.position = "right") +
+  theme(
+    axis.title = element_text(size = 20, face = "bold"), # Specific size for Axis Labels
+    axis.text = element_text(size = 16),                # Specific size for Axis Numbers
+    legend.title = element_text(size = 18),             # Specific size for Legend Title
+    legend.text = element_text(size = 16)               # Specific size for Legend Items
+  )
 
 PCA_fig
 
