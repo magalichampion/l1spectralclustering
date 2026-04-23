@@ -93,6 +93,7 @@ RunSimulations <- function(graph_obj, method = c("l1Spectral", "Spectral", "regS
 #' @export
 #'
 l1Spectral <- function(A,k = NULL){
+  
   run_l1Spectral <- function(mat, centers) {
     Structure <- l1spectral::FindStructure(A = mat)
     k_hat <- l1spectral::FindNbrClusters(A = mat, structure  = Structure, k = centers, k_max = 25)

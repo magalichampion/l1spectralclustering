@@ -93,9 +93,13 @@ for (n in (n_range)){
           # Run the code on the length(graphs) graphs
           results <- list()
           for (l in (1:length(graphs))){
+            pdf(NULL)
             graph_obj <- graphs[[l]]
-            res <- RunSimulations(graph_obj, method = current_method)
+            capture.output({
+              res <- RunSimulations(graph_obj, method = current_method)
+            })
             results <- c(results,list(res))
+            dev.off()
           }
           names(results) <- paste0("Graphs",1:length(graphs))
         
